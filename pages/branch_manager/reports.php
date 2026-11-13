@@ -15,26 +15,26 @@ $txMap = ['deposit'=>'إيداع','withdrawal'=>'سحب','transfer_in'=>'تحو�
 
 switch ($type) {
     case 'transactions':
-        $headers = ['#','العميل','النوع','المبلغ','الرصيد بعد','التاريخ'];
-        $res = $conn->query("SELECT t.txn_id, c.full_name, t.txn_type, t.amount, t.balance_after, t.created_at FROM transactions t JOIN accounts a ON a.account_id=t.account_id JOIN customers c ON c.customer_id=a.customer_id WHERE t.branch_id=$bid AND t.status='completed' AND DATE(t.created_at) BETWEEN '$from' AND '$to' ORDER BY t.created_at DESC LIMIT 200");
-        while ($r = $res->fetch_assoc()) $rows[] = [$r['txn_id'],$r['full_name'],$txMap[$r['txn_type']]??$r['txn_type'],number_format($r['amount']),number_format($r['balance_after']),$r['created_at']];
+        $headers = ['#','رقم الحساب','النوع','المبلغ','الرصيد بعد','التاريخ'];
+        $res = $conn->query("SELECT t.txn_id, t.account_id, t.txn_type, t.amount, t.balance_after, t.created_at FROM transactions t WHERE t.branch_id=$bid AND t.status='completed' AND DATE(t.created_at) BETWEEN '$from' AND '$to' ORDER BY t.created_at DESC LIMIT 200");
+        while ($r = $res->fetch_assoc()) $rows[] = [$r['txn_id'],$r['account_id'],$txMap[$r['txn_type']]??$r['txn_type'],number_format($r['amount']),number_format($r['balance_after']),$r['created_at']];
         break;
     case 'customers':
-        $headers = ['الاسم','رقم الهوية','الهاتف','الجنس','تاريخ الإضافة'];
-        $res = $conn->query("SELECT full_name, national_id, phone, gender, created_at FROM customers WHERE branch_id=$bid AND is_active=1 AND created_at >= '$from 00:00:00' AND created_at < '$to 23:59:59' ORDER BY created_at DESC LIMIT 300");
-        while ($r = $res->fetch_assoc()) $rows[] = [$r['full_name'],$r['national_id'],$r['phone'],$r['gender']==='male'?'ذكر':'أنثى',$r['created_at']];
+        $headers = ['رقم الحساب','الجنس','تاريخ الإضافة'];
+        $res = $conn->query("SELECT (SELECT MIN(x.account_id) FROM accounts x WHERE x.customer_id=customers.customer_id) AS account_id, gender, created_at FROM customers WHERE branch_id=$bid AND is_active=1 AND created_at >= '$from 00:00:00' AND created_at < '$to 23:59:59' ORDER BY created_at DESC LIMIT 300");
+        while ($r = $res->fetch_assoc()) $rows[] = [$r['account_id']??'—',$r['gender']==='male'?'ذكر':'أنثى',$r['created_at']];
         break;
     case 'loans':
-        $headers = ['العميل','المبلغ','المسدّد','الحالة','الاستحقاق'];
+        $headers = ['رقم الحساب','المبلغ','المسدّد','الحالة','الاستحقاق'];
         $lMap = ['active'=>'نشط','paid'=>'مسدّد','defaulted'=>'متعثر'];
-        $res = $conn->query("SELECT c.full_name, l.amount, l.paid_amount, l.status, l.due_at FROM loans l JOIN customers c ON c.customer_id=l.customer_id WHERE l.branch_id=$bid AND l.issued_at >= '$from' AND l.issued_at <= '$to' ORDER BY l.issued_at DESC LIMIT 300");
-        while ($r = $res->fetch_assoc()) $rows[] = [$r['full_name'],number_format($r['amount']),number_format($r['paid_amount']),$lMap[$r['status']]??$r['status'],$r['due_at']];
+        $res = $conn->query("SELECT (SELECT MIN(x.account_id) FROM accounts x WHERE x.customer_id=l.customer_id) AS account_id, l.amount, l.paid_amount, l.status, l.due_at FROM loans l WHERE l.branch_id=$bid AND l.issued_at >= '$from' AND l.issued_at <= '$to' ORDER BY l.issued_at DESC LIMIT 300");
+        while ($r = $res->fetch_assoc()) $rows[] = [$r['account_id']??'—',number_format($r['amount']),number_format($r['paid_amount']),$lMap[$r['status']]??$r['status'],$r['due_at']];
         break;
     case 'complaints':
-        $headers = ['العميل','الموضوع','الحالة','تاريخ الفتح'];
+        $headers = ['رقم الحساب','الموضوع','الحالة','تاريخ الفتح'];
         $cMap = ['open'=>'مفتوحة','in_progress'=>'قيد المعالجة','resolved'=>'محلولة','closed'=>'مغلقة'];
-        $res = $conn->query("SELECT c.full_name, k.subject, k.status, k.opened_at FROM complaints k JOIN customers c ON c.customer_id=k.customer_id WHERE k.branch_id=$bid AND k.opened_at >= '$from 00:00:00' AND k.opened_at < '$to 23:59:59' ORDER BY k.opened_at DESC LIMIT 300");
-        while ($r = $res->fetch_assoc()) $rows[] = [$r['full_name'],$r['subject'],$cMap[$r['status']]??$r['status'],$r['opened_at']];
+        $res = $conn->query("SELECT (SELECT MIN(x.account_id) FROM accounts x WHERE x.customer_id=k.customer_id) AS account_id, k.subject, k.status, k.opened_at FROM complaints k WHERE k.branch_id=$bid AND k.opened_at >= '$from 00:00:00' AND k.opened_at < '$to 23:59:59' ORDER BY k.opened_at DESC LIMIT 300");
+        while ($r = $res->fetch_assoc()) $rows[] = [$r['account_id']??'—',$r['subject'],$cMap[$r['status']]??$r['status'],$r['opened_at']];
         break;
 }
 

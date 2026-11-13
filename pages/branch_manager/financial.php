@@ -63,7 +63,7 @@ $vaultToday = ($kpis['today_dep'] ?? 0) - ($kpis['today_wd'] ?? 0);
 // ── أكثر 10 حسابات نشاطاً في الفرع ──
 $topAccounts = [];
 $res = $conn->query("
-    SELECT a.account_id, c.full_name, a.account_type, a.balance,
+    SELECT a.account_id, a.account_type, a.balance,
            COUNT(t.txn_id) AS op_count,
            SUM(t.amount)   AS vol,
            SUM(CASE WHEN t.txn_type='deposit'    THEN t.amount ELSE 0 END) AS dep_vol,
@@ -73,10 +73,9 @@ $res = $conn->query("
            COUNT(CASE WHEN t.txn_type='withdrawal' THEN 1 END) AS wd_cnt,
            COUNT(CASE WHEN t.txn_type IN('transfer_in','transfer_out') THEN 1 END) AS tr_cnt
     FROM accounts a
-    JOIN customers c ON c.customer_id = a.customer_id
     LEFT JOIN transactions t ON t.account_id = a.account_id AND t.status='completed'
     WHERE a.branch_id = $bid
-    GROUP BY a.account_id, c.full_name, a.account_type, a.balance
+    GROUP BY a.account_id, a.account_type, a.balance
     ORDER BY vol DESC LIMIT 10
 ");
 while ($r = $res->fetch_assoc()) $topAccounts[] = $r;
@@ -114,10 +113,9 @@ $mTr     = array_reverse($mTr);
 
 // ── تحصيل القروض ──
 $loans = $conn->query("
-    SELECT c.full_name, l.amount, l.paid_amount, l.status, l.due_at,
+    SELECT (SELECT MIN(x.account_id) FROM accounts x WHERE x.customer_id=l.customer_id) AS account_id, l.amount, l.paid_amount, l.status, l.due_at,
            ROUND(l.paid_amount/l.amount*100,1) AS pct
     FROM loans l
-    JOIN customers c ON c.customer_id=l.customer_id
     WHERE l.branch_id=$bid ORDER BY l.status DESC, l.due_at ASC
 ")->fetch_all(MYSQLI_ASSOC);
 
@@ -368,13 +366,13 @@ $accTypeMap = ['savings'=>'توفير','current'=>'جاري','investment'=>'اس
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>#</th><th>العميل</th><th>نوع الحساب</th><th>الرصيد الحالي</th><th>إجمالي الحركة</th><th>إيداعات</th><th>سحوبات</th><th>تحويلات</th><th>إجمالي العمليات</th></tr>
+          <tr><th>#</th><th>رقم الحساب</th><th>نوع الحساب</th><th>الرصيد الحالي</th><th>إجمالي الحركة</th><th>إيداعات</th><th>سحوبات</th><th>تحويلات</th><th>إجمالي العمليات</th></tr>
         </thead>
         <tbody>
         <?php foreach ($topAccounts as $i => $a): ?>
         <tr>
           <td><?= $i===0?'🥇':($i===1?'🥈':($i===2?'🥉':$i+1)) ?></td>
-          <td><strong><?= htmlspecialchars($a['full_name']) ?></strong></td>
+          <td dir="ltr"><strong><?= (int)$a['account_id'] ?></strong></td>
           <td><span class="badge badge-gray"><?= $accTypeMap[$a['account_type']]??$a['account_type'] ?></span></td>
           <td dir="ltr"><?= fmtN($a['balance']) ?></td>
           <td style="font-weight:800;color:var(--teal)"><?= fmtN($a['vol']??0) ?></td>
@@ -407,7 +405,7 @@ $accTypeMap = ['savings'=>'توفير','current'=>'جاري','investment'=>'اس
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>العميل</th><th>المبلغ (SDG)</th><th>المسدَّد</th><th>المتبقي</th><th>نسبة السداد</th><th>الحالة</th><th>الاستحقاق</th></tr></thead>
+        <thead><tr><th>رقم الحساب</th><th>المبلغ (SDG)</th><th>المسدَّد</th><th>المتبقي</th><th>نسبة السداد</th><th>الحالة</th><th>الاستحقاق</th></tr></thead>
         <tbody>
         <?php foreach ($loans as $l):
           $remaining = $l['amount'] - $l['paid_amount'];
@@ -416,7 +414,7 @@ $accTypeMap = ['savings'=>'توفير','current'=>'جاري','investment'=>'اس
           $lMap = ['active'=>'نشط','paid'=>'مسدَّد','defaulted'=>'متعثر'];
         ?>
         <tr>
-          <td><strong><?= htmlspecialchars($l['full_name']) ?></strong></td>
+          <td dir="ltr"><strong><?= $l['account_id'] ? (int)$l['account_id'] : '—' ?></strong></td>
           <td><?= fmtN($l['amount']) ?></td>
           <td style="color:var(--success)"><?= fmtN($l['paid_amount']) ?></td>
           <td style="color:var(--danger)"><?= fmtN($remaining) ?></td>

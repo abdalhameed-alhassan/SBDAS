@@ -18,7 +18,7 @@ $monthly = array_reverse($monthly); $monthLabels = array_reverse($monthLabels);
 
 // Recent transactions
 $recentTxns = [];
-$res = $conn->query("SELECT t.*, c.full_name, a.account_id FROM transactions t JOIN accounts a ON a.account_id=t.account_id JOIN customers c ON c.customer_id=a.customer_id WHERE t.branch_id=$bid AND t.status='completed' ORDER BY t.created_at DESC LIMIT 10");
+$res = $conn->query("SELECT t.*, a.account_id FROM transactions t JOIN accounts a ON a.account_id=t.account_id WHERE t.branch_id=$bid AND t.status='completed' ORDER BY t.created_at DESC LIMIT 10");
 while ($r = $res->fetch_assoc()) $recentTxns[] = $r;
 
 open_layout('لوحة الفرع — '.(htmlspecialchars($bInfo['branch_name']??'')),'dashboard');
@@ -48,12 +48,12 @@ $txMap = ['deposit'=>'إيداع','withdrawal'=>'سحب','transfer_in'=>'تحو�
   <div class="card-body" style="padding:0">
     <div class="table-wrap">
       <table>
-        <thead><tr><th>#</th><th>العميل</th><th>النوع</th><th>المبلغ</th><th>الرصيد بعد</th><th>التاريخ</th></tr></thead>
+        <thead><tr><th>#</th><th>رقم الحساب</th><th>النوع</th><th>المبلغ</th><th>الرصيد بعد</th><th>التاريخ</th></tr></thead>
         <tbody>
           <?php foreach ($recentTxns as $t): ?>
           <tr>
             <td><?= $t['txn_id'] ?></td>
-            <td><?= htmlspecialchars($t['full_name']) ?></td>
+            <td dir="ltr"><?= (int)$t['account_id'] ?></td>
             <td><span class="badge badge-<?= in_array($t['txn_type'],['deposit','transfer_in'])?'success':'danger' ?>"><?= $txMap[$t['txn_type']]??$t['txn_type'] ?></span></td>
             <td dir="ltr"><?= number_format($t['amount']) ?></td>
             <td dir="ltr"><?= number_format($t['balance_after']) ?></td>

@@ -91,14 +91,14 @@ $extAppStats = $conn->query("
 // ── عملاء التطبيق تفصيلي ──
 $appCustomers = [];
 $res = $conn->query("
-    SELECT c.full_name, au.device_type, au.registered_at, au.last_login, au.is_active,
+    SELECT (SELECT MIN(x.account_id) FROM accounts x WHERE x.customer_id=au.customer_id) AS account_id, au.device_type, au.registered_at, au.last_login, au.is_active,
            COUNT(s.session_id) AS sessions,
            COUNT(CASE WHEN s.action_type='transfer' THEN 1 END) AS transfers
     FROM app_users au
     JOIN customers c ON c.customer_id = au.customer_id
     LEFT JOIN app_sessions s ON s.app_user_id = au.app_user_id
     WHERE c.branch_id = $bid
-    GROUP BY au.app_user_id, c.full_name, au.device_type, au.registered_at, au.last_login, au.is_active
+    GROUP BY au.app_user_id, au.customer_id, au.device_type, au.registered_at, au.last_login, au.is_active
     ORDER BY sessions DESC
 ");
 while ($r = $res->fetch_assoc()) $appCustomers[] = $r;
@@ -255,14 +255,14 @@ function fmtN($n){
   <div class="card-body" style="padding:0">
     <div class="table-wrap">
       <table>
-        <thead><tr><th>العميل</th><th>الجهاز</th><th>تاريخ التسجيل</th><th>آخر دخول</th><th>الجلسات</th><th>التحويلات</th><th>الحالة</th></tr></thead>
+        <thead><tr><th>رقم الحساب</th><th>الجهاز</th><th>تاريخ التسجيل</th><th>آخر دخول</th><th>الجلسات</th><th>التحويلات</th><th>الحالة</th></tr></thead>
         <tbody>
         <?php foreach ($appCustomers as $ac):
           $daysSince = $ac['last_login'] ? floor((time()-strtotime($ac['last_login']))/86400) : 999;
           $actClass  = $daysSince <= 7 ? 'success' : ($daysSince <= 30 ? 'teal' : ($daysSince <= 90 ? 'warn' : 'danger'));
         ?>
         <tr>
-          <td><strong><?= htmlspecialchars($ac['full_name']) ?></strong></td>
+          <td dir="ltr"><strong><?= $ac['account_id'] ? (int)$ac['account_id'] : '—' ?></strong></td>
           <td><?= $ac['device_type']==='android'?'🤖 Android':($ac['device_type']==='ios'?'🍎 iOS':'🌐 Web') ?></td>
           <td style="font-size:12px;color:var(--gray-500)"><?= date('Y-m-d',strtotime($ac['registered_at'])) ?></td>
           <td><span class="badge badge-<?= $actClass ?>"><?= $ac['last_login'] ? date('Y-m-d',strtotime($ac['last_login'])) : '—' ?></span></td>
