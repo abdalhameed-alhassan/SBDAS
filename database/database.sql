@@ -397,7 +397,7 @@ GROUP BY DATE_FORMAT(created_at,'%Y-%m');
 
 CREATE OR REPLACE VIEW vw_external_bank_summary AS
 SELECT external_bank,
-    bban, swift_code,
+    MAX(swift_code) AS swift_code,
     SUM(CASE WHEN direction='inbound'  THEN amount ELSE 0 END) AS total_inbound,
     SUM(CASE WHEN direction='outbound' THEN amount ELSE 0 END) AS total_outbound,
     SUM(CASE WHEN direction='inbound'  THEN amount ELSE 0 END)
@@ -405,7 +405,7 @@ SELECT external_bank,
     COUNT(CASE WHEN direction='inbound'  THEN 1 END) AS inbound_count,
     COUNT(CASE WHEN direction='outbound' THEN 1 END) AS outbound_count
 FROM external_transfers WHERE status='completed'
-GROUP BY external_bank, bban, swift_code;
+GROUP BY external_bank;
 
 CREATE OR REPLACE VIEW vw_external_flow_monthly AS
 SELECT DATE_FORMAT(created_at,'%Y-%m') AS month,

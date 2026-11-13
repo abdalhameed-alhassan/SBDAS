@@ -37,7 +37,17 @@ while ($r = $res->fetch_assoc()) $branchFlow[] = $r;
 
 // ── 7. External Bank Summary ──
 $extBanks = [];
-$res = $conn->query("SELECT * FROM vw_external_bank_summary ORDER BY (total_inbound + total_outbound) DESC");
+// تجميع حسب البنك فقط (وليس حسب رقم الحساب) حتى يظهر كل بنك في صف واحد
+$res = $conn->query("SELECT external_bank, MAX(swift_code) AS swift_code,
+    SUM(CASE WHEN direction='inbound'  THEN amount ELSE 0 END) AS total_inbound,
+    SUM(CASE WHEN direction='outbound' THEN amount ELSE 0 END) AS total_outbound,
+    SUM(CASE WHEN direction='inbound'  THEN amount ELSE 0 END)
+      - SUM(CASE WHEN direction='outbound' THEN amount ELSE 0 END) AS net_balance,
+    COUNT(CASE WHEN direction='inbound'  THEN 1 END) AS inbound_count,
+    COUNT(CASE WHEN direction='outbound' THEN 1 END) AS outbound_count
+  FROM external_transfers WHERE status='completed'
+  GROUP BY external_bank
+  ORDER BY (total_inbound + total_outbound) DESC");
 while ($r = $res->fetch_assoc()) $extBanks[] = $r;
 
 // ── 8. External Flow Monthly ──
