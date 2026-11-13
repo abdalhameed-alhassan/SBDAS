@@ -35,7 +35,8 @@ function open_layout($title = 'SBDAS', $active = '') {
 </head>
 <body>
 <div class="layout">
-  <aside class="sidebar">
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">
       <a class="brand-logo" href="<?= $base ?>pages/<?= $role === 'admin' ? 'admin' : ($role === 'executive' ? 'executive' : 'branch_manager') ?>/dashboard.php">
         <img class="brand-img" src="<?= $base ?>img/sbdas-logo.png" alt="SBDAS — نظام دعم اتخاذ القرار والتحليل المصرفي للمصارف السودانية">
@@ -67,7 +68,10 @@ function open_layout($title = 'SBDAS', $active = '') {
 
   <div class="main">
     <header class="topbar">
-      <div class="topbar-title"><?= htmlspecialchars($title) ?></div>
+      <div class="topbar-start">
+        <button type="button" class="menu-btn" id="menuBtn" aria-label="القائمة" aria-expanded="false">☰</button>
+        <div class="topbar-title"><?= htmlspecialchars($title) ?></div>
+      </div>
       <div class="topbar-right">
         <div class="topbar-date"><?= date('l، d F Y') ?></div>
         <div class="notif-badge">🔔<span class="dot"></span></div>
@@ -115,6 +119,17 @@ function close_layout() {
     </div><!-- page-content -->
   </div><!-- main -->
 </div><!-- layout -->
+<script>
+(function(){
+  var b=document.getElementById('menuBtn'), sb=document.getElementById('sidebar'), ov=document.getElementById('sidebarOverlay');
+  if(!b||!sb||!ov) return;
+  function set(open){ sb.classList.toggle('open',open); ov.classList.toggle('show',open); b.setAttribute('aria-expanded',open?'true':'false'); }
+  b.addEventListener('click',function(){ set(!sb.classList.contains('open')); });
+  ov.addEventListener('click',function(){ set(false); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape') set(false); });
+  window.addEventListener('resize',function(){ if(window.innerWidth>768) set(false); });
+})();
+</script>
 </body>
 </html>
 <?php
