@@ -16,7 +16,6 @@ function open_layout($title = 'SBDAS', $active = '') {
         $nav[] = ['icon'=>'💰','label'=>'التحليل المالي','href'=>$base.'pages/executive/financial.php','key'=>'financial'];
         $nav[] = ['icon'=>'📱','label'=>'التحليل الرقمي','href'=>$base.'pages/executive/digital.php','key'=>'digital'];
         $nav[] = ['icon'=>'📋','label'=>'التقارير','href'=>$base.'pages/executive/reports.php','key'=>'reports'];
-        $nav[] = ['icon'=>'🔔','label'=>'التنبيهات والتوصيات','href'=>$base.'pages/executive/alerts.php','key'=>'alerts'];
     } else {
         $nav[] = ['icon'=>'📊','label'=>'لوحة الفرع',     'href'=>$base.'pages/branch_manager/dashboard.php','key'=>'dashboard'];
         $nav[] = ['icon'=>'💰','label'=>'التحليل المالي',  'href'=>$base.'pages/branch_manager/financial.php', 'key'=>'financial'];

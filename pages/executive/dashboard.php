@@ -71,11 +71,6 @@ $res = $conn->query("SELECT DATE_FORMAT(created_at,'%Y-%m') AS mo, SUM(amount) A
 while ($r = $res->fetch_assoc()) { $depLabels[] = $r['mo']; $depData[] = (float)$r['total']; }
 $depLabels = array_reverse($depLabels); $depData = array_reverse($depData);
 
-// ── Notifications ──
-$notifs = [];
-$res = $conn->query("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 5");
-while ($r = $res->fetch_assoc()) $notifs[] = $r;
-
 open_layout('لوحة الإدارة العليا','dashboard');
 
 function fmt($n) {
@@ -140,27 +135,6 @@ function fmt($n) {
     <div class="card-body"><div class="chart-container" style="height:220px"><canvas id="depChart"></canvas></div></div>
   </div>
 </div>
-
-<!-- ── Alerts ── -->
-<?php if ($notifs): ?>
-<div class="card">
-  <div class="card-header">
-    <div class="card-title"><span class="icon">🔔</span> التنبيهات الإدارية</div>
-    <a href="alerts.php" class="btn btn-gold btn-sm">كل التنبيهات</a>
-  </div>
-  <div class="card-body">
-    <?php foreach ($notifs as $n):
-        $cls = $n['type']==='alert'?'danger':($n['type']==='warning'?'warning':'info');
-        $ico = $n['type']==='alert'?'🚨':($n['type']==='warning'?'⚠️':'ℹ️');
-    ?>
-    <div class="alert-box <?= $cls ?>">
-      <span class="alert-icon"><?= $ico ?></span>
-      <div><div class="alert-title"><?= htmlspecialchars($n['title']) ?></div><div class="alert-msg"><?= htmlspecialchars($n['message']) ?></div></div>
-    </div>
-    <?php endforeach; ?>
-  </div>
-</div>
-<?php endif; ?>
 
 <script>
 new Chart(document.getElementById('growthChart').getContext('2d'),{
