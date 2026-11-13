@@ -1,0 +1,16 @@
+# أسرار وإعدادات محلية
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+vercel.env
+.vercel/
+# نسخ احتياطية وبيانات
+*.bak
+*.dump
+*backup*.sql
+*.log
+node_modules/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,16 @@
+Vercel > Project > Settings > Environment Variables   (Environment: Production + Preview)
+-------------------------------------------------------------------------------------------
+Replace the <...> values with YOUR Aiven service details. Never put these values in GitHub.
+
+DB_HOST        = <Aiven host>
+DB_PORT        = <Aiven port>
+DB_USER        = avnadmin
+DB_NAME        = sbdas                      (the SBDAS database - NOT defaultdb, which belongs to SNTMP)
+DB_PASS        = <Aiven password>           (mark as "Sensitive"; type it yourself)
+DB_SSL         = 1
+DB_SSL_CA_PEM  = <paste the WHOLE Aiven CA certificate text, BEGIN to END lines included>
+APP_BASE_URL   = /
+SESSION_STORE  = db
+DEMO_LOGIN     = 1                          (shows the two review buttons on the login page; remove or set 0 to disable)
+
+After adding or changing variables you must Redeploy.

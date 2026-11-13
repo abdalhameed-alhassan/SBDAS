@@ -1,0 +1,13 @@
+# ملفات لا يحتاجها وقت التشغيل ولا يجب أن تُخدم علناً
+database/
+tools/
+docs/
+*.md
+*.sql
+*.bak
+*.log
+.env
+.env.*
+!.env.example
+.git
+.gitignore
