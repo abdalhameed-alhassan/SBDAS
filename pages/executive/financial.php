@@ -165,7 +165,7 @@ function fmtN($n){if($n>=1000000)return number_format($n/1000000,1).'م';if($n>=
         <?php
         $totalOps=array_sum(array_column($txnTypes,'cnt'))?:1;
         $typeMap=['deposit'=>'إيداع','withdrawal'=>'سحب','transfer_in'=>'تحويل وارد','transfer_out'=>'تحويل صادر'];
-        $subMap=['cash'=>'نقدي','cheque'=>'شيك','app_transfer'=>'تطبيق','web_transfer'=>'ويب','internal_transfer'=>'داخلي','swift'=>'SWIFT','rtgs'=>'RTGS','bban'=>'BBAN','atm'=>'صرف آلي','pos'=>'نقطة بيع'];
+        $subMap=['cash'=>'نقدي','cheque'=>'شيك','app_transfer'=>'تطبيق','web_transfer'=>'ويب','internal_transfer'=>'داخلي','bban'=>'BBAN','atm'=>'صرف آلي','pos'=>'نقطة بيع'];
         foreach($txnTypes as $t):
             $pct=round($t['cnt']/$totalOps*100,1);
         ?>

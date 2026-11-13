@@ -83,7 +83,7 @@ if ($generated) {
                     LIMIT 200";
             $txMap  = ['deposit'=>'إيداع','withdrawal'=>'سحب','transfer_in'=>'تحويل وارد','transfer_out'=>'تحويل صادر'];
             $subMap = ['cash'=>'نقدي','cheque'=>'شيك','app_transfer'=>'تطبيق','web_transfer'=>'ويب',
-                       'internal_transfer'=>'داخلي','swift'=>'SWIFT','rtgs'=>'RTGS','bban'=>'BBAN','atm'=>'ATM','pos'=>'POS'];
+                       'internal_transfer'=>'داخلي','bban'=>'BBAN','atm'=>'ATM','pos'=>'POS'];
             $res = $conn->query($sql);
             while ($r = $res->fetch_assoc())
                 $rows[] = [$r['txn_id'], $r['account_id'], $r['branch_name'],

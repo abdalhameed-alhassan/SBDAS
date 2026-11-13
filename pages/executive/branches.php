@@ -112,7 +112,7 @@ function fmtN($n){
   <div class="card-body" style="padding:0">
     <div class="table-wrap">
       <table>
-        <thead><tr><th>الفرع</th><th>نقدي</th><th>شيك</th><th>تطبيق</th><th>BBAN</th><th>SWIFT</th><th>RTGS</th></tr></thead>
+        <thead><tr><th>الفرع</th><th>نقدي</th><th>شيك</th><th>تطبيق</th><th>BBAN</th></tr></thead>
         <tbody>
         <?php foreach($branches as $b): $dep=$depBreak[$b['branch_id']]??[]; ?>
         <tr>
@@ -121,8 +121,6 @@ function fmtN($n){
           <td><?=fmtN($dep['dep_cheque']??0)?> <small>(<?=$dep['dep_cheque_count']??0?>)</small></td>
           <td><?=fmtN($dep['dep_app']??0)?> <small>(<?=$dep['dep_app_count']??0?>)</small></td>
           <td><?=fmtN($dep['dep_bban']??0)?> <small>(<?=$dep['dep_bban_count']??0?>)</small></td>
-          <td><?=fmtN($dep['dep_swift']??0)?> <small>(<?=$dep['dep_swift_count']??0?>)</small></td>
-          <td><?=fmtN($dep['dep_rtgs']??0)?></td>
         </tr>
         <?php endforeach; ?>
         </tbody>
@@ -137,7 +135,7 @@ function fmtN($n){
   <div class="card-body" style="padding:0">
     <div class="table-wrap">
       <table>
-        <thead><tr><th>الفرع</th><th>عبر التطبيق</th><th>داخلي (بين الفروع)</th><th>BBAN</th><th>SWIFT</th><th>RTGS</th></tr></thead>
+        <thead><tr><th>الفرع</th><th>عبر التطبيق</th><th>داخلي (بين الفروع)</th><th>BBAN</th></tr></thead>
         <tbody>
         <?php foreach($branches as $b): $tr=$trBreak[$b['branch_id']]??[]; ?>
         <tr>
@@ -145,8 +143,6 @@ function fmtN($n){
           <td><?=fmtN($tr['tr_app']??0)?> <small>(<?=$tr['tr_app_count']??0?>)</small></td>
           <td><?=fmtN($tr['tr_internal']??0)?> <small>(<?=$tr['tr_internal_count']??0?>)</small></td>
           <td><?=fmtN($tr['tr_bban']??0)?> <small>(<?=$tr['tr_bban_count']??0?>)</small></td>
-          <td><?=fmtN($tr['tr_swift']??0)?> <small>(<?=$tr['tr_swift_count']??0?>)</small></td>
-          <td><?=fmtN($tr['tr_rtgs']??0)?></td>
         </tr>
         <?php endforeach; ?>
         </tbody>

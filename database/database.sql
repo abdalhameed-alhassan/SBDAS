@@ -78,7 +78,7 @@ CREATE TABLE transactions (
     account_id   INT NOT NULL,
     branch_id    INT NOT NULL,
     txn_type     ENUM('deposit','withdrawal','transfer_in','transfer_out') NOT NULL,
-    sub_type     ENUM('cash','cheque','app_transfer','web_transfer','internal_transfer','swift','rtgs','bban','atm','pos') NOT NULL DEFAULT 'cash',
+    sub_type     ENUM('cash','cheque','app_transfer','web_transfer','internal_transfer','bban','atm','pos') NOT NULL DEFAULT 'cash',
     channel      ENUM('branch','app','web','atm','pos') NOT NULL DEFAULT 'branch',
     amount       DECIMAL(15,2) NOT NULL,
     balance_after DECIMAL(15,2) NOT NULL,
@@ -106,7 +106,7 @@ CREATE TABLE internal_transfers (
     FOREIGN KEY (to_branch_id)    REFERENCES branches(branch_id)
 ) ENGINE=InnoDB;
 
--- external_transfers: التحويلات مع البنوك الأخرى (SWIFT + BBAN)
+-- external_transfers: التحويلات مع البنوك الأخرى (BBAN)
 CREATE TABLE external_transfers (
     ext_id        INT AUTO_INCREMENT PRIMARY KEY,
     account_id    INT NOT NULL,
@@ -114,10 +114,9 @@ CREATE TABLE external_transfers (
     direction     ENUM('inbound','outbound') NOT NULL,
     external_bank VARCHAR(100) NOT NULL,
     bban          VARCHAR(30)  DEFAULT NULL,  -- رقم الحساب البنكي الأساسي السوداني
-    swift_code    VARCHAR(15)  DEFAULT NULL,  -- رمز SWIFT للبنك الخارجي
     amount        DECIMAL(15,2) NOT NULL,
     currency      VARCHAR(10) DEFAULT 'SDG',
-    channel       ENUM('branch','app','swift','rtgs','bban') NOT NULL DEFAULT 'bban',
+    channel       ENUM('branch','app','bban') NOT NULL DEFAULT 'bban',
     status        ENUM('completed','pending','rejected') DEFAULT 'completed',
     created_at    DATETIME NOT NULL,
     FOREIGN KEY (account_id) REFERENCES accounts(account_id),
@@ -279,13 +278,10 @@ SELECT
     COALESCE(SUM(CASE WHEN t.sub_type='cheque'       THEN t.amount END),0) AS dep_cheque,
     COALESCE(SUM(CASE WHEN t.sub_type='app_transfer' THEN t.amount END),0) AS dep_app,
     COALESCE(SUM(CASE WHEN t.sub_type='bban'         THEN t.amount END),0) AS dep_bban,
-    COALESCE(SUM(CASE WHEN t.sub_type='swift'        THEN t.amount END),0) AS dep_swift,
-    COALESCE(SUM(CASE WHEN t.sub_type='rtgs'         THEN t.amount END),0) AS dep_rtgs,
     COUNT(CASE WHEN t.sub_type='cash'   THEN 1 END) AS dep_cash_count,
     COUNT(CASE WHEN t.sub_type='cheque' THEN 1 END) AS dep_cheque_count,
     COUNT(CASE WHEN t.sub_type='app_transfer' THEN 1 END) AS dep_app_count,
-    COUNT(CASE WHEN t.sub_type='bban'   THEN 1 END) AS dep_bban_count,
-    COUNT(CASE WHEN t.sub_type='swift'  THEN 1 END) AS dep_swift_count
+    COUNT(CASE WHEN t.sub_type='bban'   THEN 1 END) AS dep_bban_count
 FROM branches b
 LEFT JOIN transactions t ON t.branch_id=b.branch_id
     AND t.txn_type='deposit' AND t.status='completed'
@@ -299,12 +295,9 @@ SELECT
     COALESCE(SUM(CASE WHEN t.sub_type='app_transfer'      THEN t.amount END),0) AS tr_app,
     COALESCE(SUM(CASE WHEN t.sub_type='internal_transfer' THEN t.amount END),0) AS tr_internal,
     COALESCE(SUM(CASE WHEN t.sub_type='bban'              THEN t.amount END),0) AS tr_bban,
-    COALESCE(SUM(CASE WHEN t.sub_type='swift'             THEN t.amount END),0) AS tr_swift,
-    COALESCE(SUM(CASE WHEN t.sub_type='rtgs'              THEN t.amount END),0) AS tr_rtgs,
     COUNT(CASE WHEN t.sub_type='app_transfer'      THEN 1 END) AS tr_app_count,
     COUNT(CASE WHEN t.sub_type='internal_transfer' THEN 1 END) AS tr_internal_count,
-    COUNT(CASE WHEN t.sub_type='bban'              THEN 1 END) AS tr_bban_count,
-    COUNT(CASE WHEN t.sub_type='swift'             THEN 1 END) AS tr_swift_count
+    COUNT(CASE WHEN t.sub_type='bban'              THEN 1 END) AS tr_bban_count
 FROM branches b
 LEFT JOIN transactions t ON t.branch_id=b.branch_id
     AND t.txn_type IN('transfer_in','transfer_out') AND t.status='completed'
@@ -397,7 +390,6 @@ GROUP BY DATE_FORMAT(created_at,'%Y-%m');
 
 CREATE OR REPLACE VIEW vw_external_bank_summary AS
 SELECT external_bank,
-    MAX(swift_code) AS swift_code,
     SUM(CASE WHEN direction='inbound'  THEN amount ELSE 0 END) AS total_inbound,
     SUM(CASE WHEN direction='outbound' THEN amount ELSE 0 END) AS total_outbound,
     SUM(CASE WHEN direction='inbound'  THEN amount ELSE 0 END)
@@ -664,8 +656,8 @@ INSERT INTO transactions (account_id,branch_id,txn_type,sub_type,channel,amount,
 (1,1,'deposit','bban','branch',350000.00,2000000.00,'2025-11-08 09:00:00'),
 (1,1,'withdrawal','cash','branch',100000.00,1900000.00,'2025-12-15 10:00:00'),
 (1,1,'deposit','cheque','branch',250000.00,2150000.00,'2026-01-20 09:00:00'),
-(1,1,'transfer_out','swift','branch',500000.00,1650000.00,'2026-02-10 10:00:00'),
-(1,1,'deposit','rtgs','branch',700000.00,2350000.00,'2026-03-05 09:00:00'),
+(1,1,'transfer_out','bban','branch',500000.00,1650000.00,'2026-02-10 10:00:00'),
+(1,1,'deposit','bban','branch',700000.00,2350000.00,'2026-03-05 09:00:00'),
 (1,1,'withdrawal','atm','atm',50000.00,2300000.00,'2026-04-08 14:00:00'),
 (1,1,'deposit','cash','branch',400000.00,2700000.00,'2026-05-12 09:00:00'),
 (1,1,'withdrawal','cheque','branch',800000.00,1900000.00,'2026-06-03 10:00:00'),
@@ -676,29 +668,29 @@ INSERT INTO transactions (account_id,branch_id,txn_type,sub_type,channel,amount,
 (2,1,'deposit','cash','branch',60000.00,340000.00,'2026-05-05 09:00:00'),
 (4,1,'deposit','cash','branch',1000000.00,3500000.00,'2025-08-01 09:00:00'),
 (4,1,'transfer_out','bban','branch',300000.00,3200000.00,'2025-10-05 10:00:00'),
-(4,1,'deposit','rtgs','branch',800000.00,4000000.00,'2026-01-15 09:00:00'),
+(4,1,'deposit','bban','branch',800000.00,4000000.00,'2026-01-15 09:00:00'),
 (4,1,'withdrawal','cheque','branch',500000.00,3500000.00,'2026-03-10 10:00:00'),
 (4,1,'deposit','bban','branch',600000.00,4100000.00,'2026-05-20 09:00:00'),
 (6,1,'deposit','cash','branch',150000.00,620000.00,'2025-09-10 09:00:00'),
 (6,1,'withdrawal','pos','pos',25000.00,595000.00,'2025-11-05 16:00:00'),
 (6,1,'deposit','app_transfer','app',80000.00,675000.00,'2026-01-25 08:00:00'),
 (6,1,'withdrawal','cash','branch',100000.00,575000.00,'2026-04-12 10:00:00'),
-(9,1,'deposit','rtgs','branch',400000.00,1250000.00,'2025-10-01 09:00:00'),
-(9,1,'transfer_out','swift','branch',200000.00,1050000.00,'2026-01-08 10:00:00'),
+(9,1,'deposit','bban','branch',400000.00,1250000.00,'2025-10-01 09:00:00'),
+(9,1,'transfer_out','bban','branch',200000.00,1050000.00,'2026-01-08 10:00:00'),
 (9,1,'deposit','bban','branch',300000.00,1350000.00,'2026-04-20 09:00:00'),
 (9,1,'withdrawal','cheque','branch',100000.00,1250000.00,'2026-06-10 10:00:00'),
-(13,1,'deposit','rtgs','branch',2000000.00,4500000.00,'2025-08-15 09:00:00'),
-(13,1,'transfer_out','swift','branch',1000000.00,3500000.00,'2025-11-01 10:00:00'),
+(13,1,'deposit','bban','branch',2000000.00,4500000.00,'2025-08-15 09:00:00'),
+(13,1,'transfer_out','bban','branch',1000000.00,3500000.00,'2025-11-01 10:00:00'),
 (13,1,'deposit','bban','branch',1500000.00,5000000.00,'2026-02-15 09:00:00'),
 (13,1,'withdrawal','cheque','branch',800000.00,4200000.00,'2026-05-08 10:00:00'),
 -- فرع 2
 (22,2,'deposit','cash','branch',300000.00,1150000.00,'2025-09-01 09:00:00'),
 (22,2,'transfer_out','bban','branch',200000.00,950000.00,'2025-11-15 10:00:00'),
-(22,2,'deposit','rtgs','branch',500000.00,1450000.00,'2026-02-01 09:00:00'),
+(22,2,'deposit','bban','branch',500000.00,1450000.00,'2026-02-01 09:00:00'),
 (22,2,'withdrawal','cheque','branch',300000.00,1150000.00,'2026-04-20 10:00:00'),
 (22,2,'deposit','bban','branch',400000.00,1550000.00,'2026-06-05 09:00:00'),
-(24,2,'deposit','rtgs','branch',1500000.00,3800000.00,'2025-08-20 09:00:00'),
-(24,2,'transfer_out','swift','branch',800000.00,3000000.00,'2025-11-10 10:00:00'),
+(24,2,'deposit','bban','branch',1500000.00,3800000.00,'2025-08-20 09:00:00'),
+(24,2,'transfer_out','bban','branch',800000.00,3000000.00,'2025-11-10 10:00:00'),
 (24,2,'deposit','bban','branch',1000000.00,4000000.00,'2026-02-20 09:00:00'),
 (24,2,'withdrawal','cheque','branch',600000.00,3400000.00,'2026-05-15 10:00:00'),
 (26,2,'deposit','cash','branch',200000.00,720000.00,'2025-10-05 09:00:00'),
@@ -708,8 +700,8 @@ INSERT INTO transactions (account_id,branch_id,txn_type,sub_type,channel,amount,
 (28,2,'withdrawal','cheque','branch',150000.00,830000.00,'2025-12-05 10:00:00'),
 (28,2,'deposit','bban','branch',300000.00,1130000.00,'2026-03-20 09:00:00'),
 (28,2,'transfer_out','bban','branch',200000.00,930000.00,'2026-06-01 10:00:00'),
-(30,2,'deposit','rtgs','branch',800000.00,2500000.00,'2025-10-10 09:00:00'),
-(30,2,'transfer_out','swift','branch',500000.00,2000000.00,'2026-01-20 10:00:00'),
+(30,2,'deposit','bban','branch',800000.00,2500000.00,'2025-10-10 09:00:00'),
+(30,2,'transfer_out','bban','branch',500000.00,2000000.00,'2026-01-20 10:00:00'),
 (30,2,'deposit','bban','branch',700000.00,2700000.00,'2026-04-10 09:00:00'),
 -- فرع 3
 (39,3,'deposit','cash','branch',100000.00,310000.00,'2025-09-20 09:00:00'),
@@ -719,8 +711,8 @@ INSERT INTO transactions (account_id,branch_id,txn_type,sub_type,channel,amount,
 (40,3,'transfer_out','bban','branch',150000.00,720000.00,'2026-01-12 10:00:00'),
 (40,3,'deposit','bban','branch',250000.00,970000.00,'2026-04-15 09:00:00'),
 (40,3,'withdrawal','cheque','branch',100000.00,870000.00,'2026-06-08 10:00:00'),
-(42,3,'deposit','rtgs','branch',500000.00,1950000.00,'2025-11-01 09:00:00'),
-(42,3,'transfer_out','swift','branch',300000.00,1650000.00,'2026-02-05 10:00:00'),
+(42,3,'deposit','bban','branch',500000.00,1950000.00,'2025-11-01 09:00:00'),
+(42,3,'transfer_out','bban','branch',300000.00,1650000.00,'2026-02-05 10:00:00'),
 (42,3,'deposit','bban','branch',400000.00,2050000.00,'2026-05-10 09:00:00'),
 (45,3,'deposit','cash','branch',120000.00,430000.00,'2025-10-20 09:00:00'),
 (45,3,'withdrawal','atm','atm',30000.00,400000.00,'2025-12-25 15:00:00'),
@@ -736,8 +728,8 @@ INSERT INTO transactions (account_id,branch_id,txn_type,sub_type,channel,amount,
 (52,4,'withdrawal','cheque','branch',100000.00,650000.00,'2025-12-10 10:00:00'),
 (52,4,'deposit','bban','branch',200000.00,850000.00,'2026-03-25 09:00:00'),
 (52,4,'transfer_out','bban','branch',150000.00,700000.00,'2026-06-05 10:00:00'),
-(54,4,'deposit','rtgs','branch',400000.00,1600000.00,'2025-11-15 09:00:00'),
-(54,4,'transfer_out','swift','branch',200000.00,1400000.00,'2026-02-22 10:00:00'),
+(54,4,'deposit','bban','branch',400000.00,1600000.00,'2025-11-15 09:00:00'),
+(54,4,'transfer_out','bban','branch',200000.00,1400000.00,'2026-02-22 10:00:00'),
 (54,4,'deposit','bban','branch',300000.00,1700000.00,'2026-05-18 09:00:00'),
 -- فرع 5
 (61,5,'deposit','cash','branch',80000.00,245000.00,'2025-11-01 09:00:00'),
@@ -746,7 +738,7 @@ INSERT INTO transactions (account_id,branch_id,txn_type,sub_type,channel,amount,
 (62,5,'deposit','cash','branch',150000.00,680000.00,'2025-10-18 09:00:00'),
 (62,5,'withdrawal','cheque','branch',80000.00,600000.00,'2026-01-05 10:00:00'),
 (62,5,'deposit','bban','branch',150000.00,750000.00,'2026-04-20 09:00:00'),
-(64,5,'deposit','rtgs','branch',300000.00,1400000.00,'2025-11-20 09:00:00'),
+(64,5,'deposit','bban','branch',300000.00,1400000.00,'2025-11-20 09:00:00'),
 (64,5,'transfer_out','bban','branch',150000.00,1250000.00,'2026-02-28 10:00:00'),
 (64,5,'deposit','bban','branch',200000.00,1450000.00,'2026-05-25 09:00:00'),
 -- فروع 6،7،8
@@ -795,7 +787,7 @@ INSERT INTO complaints (customer_id,branch_id,subject,status,opened_at,resolved_
 (27,2,'تأخر إصدار بطاقة الصرف','open','2026-05-15 09:00:00',NULL),
 (33,2,'خطأ في كشف الحساب','resolved','2026-02-20 09:00:00','2026-02-28 14:00:00'),
 (40,3,'تأخر صرف القرض','open','2026-04-08 09:00:00',NULL),
-(42,3,'مشكلة في تحويل SWIFT','in_progress','2026-05-01 09:00:00',NULL),
+(42,3,'مشكلة في تحويل بنكي','in_progress','2026-05-01 09:00:00',NULL),
 (52,4,'مشكلة في الصرف الآلي','resolved','2026-03-05 09:00:00','2026-03-10 14:00:00'),
 (57,4,'تجميد الحساب بدون إشعار','open','2026-04-18 09:00:00',NULL),
 (62,5,'تأخر التحويل الداخلي','open','2026-05-10 09:00:00',NULL),
@@ -1000,50 +992,50 @@ SELECT au.app_user_id,7,'transfer',40000.00,'2026-06-05 09:10:00' FROM app_users
 SELECT au.app_user_id,8,'login',NULL,'2026-06-10 10:00:00' FROM app_users au WHERE au.customer_id=79 UNION ALL
 SELECT au.app_user_id,8,'view_balance',NULL,'2026-06-10 10:01:00' FROM app_users au WHERE au.customer_id=79;
 
--- تحويلات خارجية مع البنوك السودانية (BBAN + SWIFT)
-INSERT INTO external_transfers (account_id,branch_id,direction,external_bank,bban,swift_code,amount,channel,created_at) VALUES
+-- تحويلات خارجية مع البنوك السودانية (BBAN)
+INSERT INTO external_transfers (account_id,branch_id,direction,external_bank,bban,amount,channel,created_at) VALUES
 -- بنك الخرطوم
-(1,1,'inbound', 'بنك الخرطوم',       'SD0001001001234567','KHRTSDKH',550000.00,'bban', '2026-01-15 09:00:00'),
-(1,1,'outbound','بنك الخرطوم',       'SD0001001009876543','KHRTSDKH',275000.00,'bban', '2026-02-10 10:00:00'),
-(9,1,'inbound', 'بنك الخرطوم',       'SD0001001005551234','KHRTSDKH',400000.00,'bban', '2026-03-08 09:00:00'),
-(22,2,'inbound','بنك الخرطوم',       'SD0001002001234567','KHRTSDKH',330000.00,'bban', '2026-01-20 09:00:00'),
-(28,2,'outbound','بنك الخرطوم',      'SD0001002009876543','KHRTSDKH',165000.00,'bban', '2026-03-15 10:00:00'),
-(40,3,'inbound','بنك الخرطوم',       'SD0001003001234567','KHRTSDKH',250000.00,'bban', '2026-02-18 09:00:00'),
-(52,4,'inbound','بنك الخرطوم',       'SD0001004001234567','KHRTSDKH',200000.00,'bban', '2026-04-10 09:00:00'),
+(1,1,'inbound', 'بنك الخرطوم',       'SD0001001001234567',550000.00,'bban', '2026-01-15 09:00:00'),
+(1,1,'outbound','بنك الخرطوم',       'SD0001001009876543',275000.00,'bban', '2026-02-10 10:00:00'),
+(9,1,'inbound', 'بنك الخرطوم',       'SD0001001005551234',400000.00,'bban', '2026-03-08 09:00:00'),
+(22,2,'inbound','بنك الخرطوم',       'SD0001002001234567',330000.00,'bban', '2026-01-20 09:00:00'),
+(28,2,'outbound','بنك الخرطوم',      'SD0001002009876543',165000.00,'bban', '2026-03-15 10:00:00'),
+(40,3,'inbound','بنك الخرطوم',       'SD0001003001234567',250000.00,'bban', '2026-02-18 09:00:00'),
+(52,4,'inbound','بنك الخرطوم',       'SD0001004001234567',200000.00,'bban', '2026-04-10 09:00:00'),
 -- البنك الأهلي السوداني
-(4,1,'inbound', 'البنك الأهلي السوداني','SD0002001001234567','AHLISD22',880000.00,'rtgs','2026-01-08 09:00:00'),
-(4,1,'outbound','البنك الأهلي السوداني','SD0002001009876543','AHLISD22',440000.00,'rtgs','2026-03-05 10:00:00'),
-(13,1,'inbound','البنك الأهلي السوداني','SD0002001005551234','AHLISD22',1650000.00,'rtgs','2026-02-01 09:00:00'),
-(24,2,'inbound','البنك الأهلي السوداني','SD0002002001234567','AHLISD22',770000.00,'rtgs','2026-01-25 09:00:00'),
-(30,2,'outbound','البنك الأهلي السوداني','SD0002002009876543','AHLISD22',385000.00,'rtgs','2026-04-12 10:00:00'),
-(42,3,'inbound','البنك الأهلي السوداني','SD0002003001234567','AHLISD22',550000.00,'rtgs','2026-03-10 09:00:00'),
-(54,4,'inbound','البنك الأهلي السوداني','SD0002004001234567','AHLISD22',440000.00,'rtgs','2026-02-20 09:00:00'),
-(64,5,'outbound','البنك الأهلي السوداني','SD0002005009876543','AHLISD22',275000.00,'rtgs','2026-05-05 10:00:00'),
+(4,1,'inbound', 'البنك الأهلي السوداني','SD0002001001234567',880000.00,'bban','2026-01-08 09:00:00'),
+(4,1,'outbound','البنك الأهلي السوداني','SD0002001009876543',440000.00,'bban','2026-03-05 10:00:00'),
+(13,1,'inbound','البنك الأهلي السوداني','SD0002001005551234',1650000.00,'bban','2026-02-01 09:00:00'),
+(24,2,'inbound','البنك الأهلي السوداني','SD0002002001234567',770000.00,'bban','2026-01-25 09:00:00'),
+(30,2,'outbound','البنك الأهلي السوداني','SD0002002009876543',385000.00,'bban','2026-04-12 10:00:00'),
+(42,3,'inbound','البنك الأهلي السوداني','SD0002003001234567',550000.00,'bban','2026-03-10 09:00:00'),
+(54,4,'inbound','البنك الأهلي السوداني','SD0002004001234567',440000.00,'bban','2026-02-20 09:00:00'),
+(64,5,'outbound','البنك الأهلي السوداني','SD0002005009876543',275000.00,'bban','2026-05-05 10:00:00'),
 -- بنك فيصل الإسلامي
-(1,1,'outbound','بنك فيصل الإسلامي السوداني','SD0003001009876543','FIBLSDKH',330000.00,'swift','2026-02-15 10:00:00'),
-(9,1,'inbound', 'بنك فيصل الإسلامي السوداني','SD0003001005551234','FIBLSDKH',440000.00,'swift','2026-04-08 09:00:00'),
-(24,2,'inbound','بنك فيصل الإسلامي السوداني','SD0003002001234567','FIBLSDKH',550000.00,'swift','2026-03-20 09:00:00'),
-(30,2,'outbound','بنك فيصل الإسلامي السوداني','SD0003002009876543','FIBLSDKH',220000.00,'swift','2026-05-10 10:00:00'),
-(40,3,'inbound','بنك فيصل الإسلامي السوداني','SD0003003001234567','FIBLSDKH',385000.00,'swift','2026-02-28 09:00:00'),
-(54,4,'outbound','بنك فيصل الإسلامي السوداني','SD0003004009876543','FIBLSDKH',165000.00,'swift','2026-04-25 10:00:00'),
+(1,1,'outbound','بنك فيصل الإسلامي السوداني','SD0003001009876543',330000.00,'bban','2026-02-15 10:00:00'),
+(9,1,'inbound', 'بنك فيصل الإسلامي السوداني','SD0003001005551234',440000.00,'bban','2026-04-08 09:00:00'),
+(24,2,'inbound','بنك فيصل الإسلامي السوداني','SD0003002001234567',550000.00,'bban','2026-03-20 09:00:00'),
+(30,2,'outbound','بنك فيصل الإسلامي السوداني','SD0003002009876543',220000.00,'bban','2026-05-10 10:00:00'),
+(40,3,'inbound','بنك فيصل الإسلامي السوداني','SD0003003001234567',385000.00,'bban','2026-02-28 09:00:00'),
+(54,4,'outbound','بنك فيصل الإسلامي السوداني','SD0003004009876543',165000.00,'bban','2026-04-25 10:00:00'),
 -- بنك السودان التجاري
-(4,1,'inbound', 'بنك السودان التجاري','SD0004001001234567','COMKSD22',330000.00,'bban','2026-02-05 09:00:00'),
-(22,2,'outbound','بنك السودان التجاري','SD0004002009876543','COMKSD22',165000.00,'bban','2026-03-25 10:00:00'),
-(42,3,'outbound','بنك السودان التجاري','SD0004003009876543','COMKSD22',220000.00,'bban','2026-04-18 10:00:00'),
-(52,4,'inbound','بنك السودان التجاري','SD0004004001234567','COMKSD22',275000.00,'bban','2026-05-12 09:00:00'),
-(62,5,'outbound','بنك السودان التجاري','SD0004005009876543','COMKSD22',110000.00,'bban','2026-06-02 10:00:00'),
+(4,1,'inbound', 'بنك السودان التجاري','SD0004001001234567',330000.00,'bban','2026-02-05 09:00:00'),
+(22,2,'outbound','بنك السودان التجاري','SD0004002009876543',165000.00,'bban','2026-03-25 10:00:00'),
+(42,3,'outbound','بنك السودان التجاري','SD0004003009876543',220000.00,'bban','2026-04-18 10:00:00'),
+(52,4,'inbound','بنك السودان التجاري','SD0004004001234567',275000.00,'bban','2026-05-12 09:00:00'),
+(62,5,'outbound','بنك السودان التجاري','SD0004005009876543',110000.00,'bban','2026-06-02 10:00:00'),
 -- بنك أمدرمان الوطني
-(6,1,'outbound','بنك أمدرمان الوطني','SD0005001009876543','OMDNSD22',220000.00,'bban','2026-03-01 10:00:00'),
-(26,2,'inbound','بنك أمدرمان الوطني','SD0005002001234567','OMDNSD22',275000.00,'bban','2026-02-22 09:00:00'),
-(46,3,'inbound','بنك أمدرمان الوطني','SD0005003001234567','OMDNSD22',330000.00,'rtgs','2026-04-05 09:00:00'),
-(62,5,'outbound','بنك أمدرمان الوطني','SD0005005009876543','OMDNSD22',155000.00,'bban','2026-05-28 10:00:00'),
+(6,1,'outbound','بنك أمدرمان الوطني','SD0005001009876543',220000.00,'bban','2026-03-01 10:00:00'),
+(26,2,'inbound','بنك أمدرمان الوطني','SD0005002001234567',275000.00,'bban','2026-02-22 09:00:00'),
+(46,3,'inbound','بنك أمدرمان الوطني','SD0005003001234567',330000.00,'bban','2026-04-05 09:00:00'),
+(62,5,'outbound','بنك أمدرمان الوطني','SD0005005009876543',155000.00,'bban','2026-05-28 10:00:00'),
 -- تحويلات خارجية عبر تطبيق الجوال (وارد وصادر)
-(9,1,'inbound', 'بنك الخرطوم',              'SD0001001007778889','KHRTSDKH',95000.00,'app','2026-03-22 09:20:00'),
-(28,2,'outbound','بنك الخرطوم',              'SD0001002007778889','KHRTSDKH',60000.00,'app','2026-04-02 10:20:00'),
-(13,1,'inbound', 'البنك الأهلي السوداني',    'SD0002001007778889','AHLISD22',180000.00,'app','2026-02-14 09:30:00'),
-(30,2,'outbound','البنك الأهلي السوداني',    'SD0002002007778889','AHLISD22',75000.00,'app','2026-05-18 10:30:00'),
-(40,3,'inbound', 'بنك فيصل الإسلامي السوداني','SD0003003007778889','FIBLSDKH',120000.00,'app','2026-03-30 09:40:00'),
-(52,4,'outbound','بنك السودان التجاري',       'SD0004004007778889','COMKSD22',45000.00,'app','2026-05-06 10:40:00');
+(9,1,'inbound', 'بنك الخرطوم',              'SD0001001007778889',95000.00,'app','2026-03-22 09:20:00'),
+(28,2,'outbound','بنك الخرطوم',              'SD0001002007778889',60000.00,'app','2026-04-02 10:20:00'),
+(13,1,'inbound', 'البنك الأهلي السوداني',    'SD0002001007778889',180000.00,'app','2026-02-14 09:30:00'),
+(30,2,'outbound','البنك الأهلي السوداني',    'SD0002002007778889',75000.00,'app','2026-05-18 10:30:00'),
+(40,3,'inbound', 'بنك فيصل الإسلامي السوداني','SD0003003007778889',120000.00,'app','2026-03-30 09:40:00'),
+(52,4,'outbound','بنك السودان التجاري',       'SD0004004007778889',45000.00,'app','2026-05-06 10:40:00');
 
 -- تحويلات داخلية بين الحسابات
 INSERT INTO internal_transfers (from_account_id,to_account_id,from_branch_id,to_branch_id,amount,transfer_type,channel,created_at) VALUES

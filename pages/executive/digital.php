@@ -38,7 +38,7 @@ while ($r = $res->fetch_assoc()) $branchFlow[] = $r;
 // ── 7. External Bank Summary ──
 $extBanks = [];
 // تجميع حسب البنك فقط (وليس حسب رقم الحساب) حتى يظهر كل بنك في صف واحد
-$res = $conn->query("SELECT external_bank, MAX(swift_code) AS swift_code,
+$res = $conn->query("SELECT external_bank,
     SUM(CASE WHEN direction='inbound'  THEN amount ELSE 0 END) AS total_inbound,
     SUM(CASE WHEN direction='outbound' THEN amount ELSE 0 END) AS total_outbound,
     SUM(CASE WHEN direction='inbound'  THEN amount ELSE 0 END)

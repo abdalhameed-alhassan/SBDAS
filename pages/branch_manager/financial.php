@@ -136,7 +136,7 @@ function fmtN($n){
 }
 $typeMap = ['deposit'=>'إيداع','withdrawal'=>'سحب','transfer_in'=>'تحويل وارد','transfer_out'=>'تحويل صادر'];
 $subMap  = ['cash'=>'نقدي','cheque'=>'شيك','app_transfer'=>'تطبيق','web_transfer'=>'ويب',
-            'internal_transfer'=>'داخلي','swift'=>'SWIFT','rtgs'=>'RTGS','bban'=>'BBAN','atm'=>'ATM','pos'=>'POS'];
+            'internal_transfer'=>'داخلي','bban'=>'BBAN','atm'=>'ATM','pos'=>'POS'];
 $accTypeMap = ['savings'=>'توفير','current'=>'جاري','investment'=>'استثماري'];
 ?>
 
