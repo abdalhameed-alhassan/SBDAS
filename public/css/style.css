@@ -189,21 +189,6 @@ body {
   font-weight: 700;
   color: var(--navy);
 }
-.topbar-right { display: flex; align-items: center; gap: 16px; }
-.notif-badge {
-  position: relative;
-  cursor: pointer;
-  font-size: 20px;
-  color: var(--gray-500);
-}
-.notif-badge .dot {
-  position: absolute;
-  top: -3px; left: -3px;
-  width: 8px; height: 8px;
-  background: var(--danger);
-  border-radius: 50%;
-  border: 2px solid var(--white);
-}
 .topbar-date {
   font-size: 12px;
   color: var(--gray-500);
@@ -258,7 +243,7 @@ body {
 .kpi-card.success.kpi-icon { background: var(--success-light);color: var(--success); }
 .kpi-card.warn   .kpi-icon { background: var(--warn-light);   color: var(--warn); }
 
-.kpi-body { flex: 1; }
+.kpi-body { flex: 1; min-width: 0; }
 .kpi-value {
   font-size: 26px;
   font-weight: 900;
@@ -308,7 +293,6 @@ body {
 
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
-.grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 16px; }
 
 /* ============================================================
    TABLES
@@ -362,24 +346,12 @@ tbody tr:hover { background: var(--gray-50); }
   margin-bottom: 10px;
   border-right: 4px solid;
 }
-.alert-box.warning { background: var(--warn-light);    border-color: var(--warn);    color: #7A4000; }
 .alert-box.danger  { background: var(--danger-light);  border-color: var(--danger);  color: #7A1010; }
 .alert-box.info    { background: var(--teal-light);    border-color: var(--teal);    color: #0A3D4F; }
-.alert-box .alert-icon { font-size: 18px; margin-top: 1px; }
-.alert-box .alert-title { font-weight: 700; font-size: 13px; margin-bottom: 3px; }
-.alert-box .alert-msg   { font-size: 12.5px; }
 
 /* ============================================================
    PROGRESS BARS
    ============================================================ */
-.progress-bar-wrap { margin-top: 6px; }
-.progress-label {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: var(--gray-500);
-  margin-bottom: 4px;
-}
 .progress-track {
   height: 7px;
   background: var(--gray-100);
@@ -399,43 +371,10 @@ tbody tr:hover { background: var(--gray-50); }
 /* ============================================================
    BRANCH COMPARISON BARS
    ============================================================ */
-.branch-bar-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-.branch-bar-label { width: 130px; font-size: 12.5px; color: var(--gray-700); flex-shrink: 0; }
-.branch-bar-track { flex: 1; height: 22px; background: var(--gray-100); border-radius: 6px; overflow: hidden; position: relative; }
-.branch-bar-fill  { height: 100%; border-radius: 6px; display: flex; align-items: center; padding-right: 8px; font-size: 11px; font-weight: 700; color: var(--white); min-width: 30px; transition: width .8s ease; }
-.branch-bar-val   { font-size: 12px; font-weight: 700; color: var(--navy); width: 60px; text-align: left; flex-shrink: 0; }
 
 /* ============================================================
    RANK TABLE (top accounts)
    ============================================================ */
-.rank-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--gray-100);
-}
-.rank-row:last-child { border-bottom: none; }
-.rank-num {
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  background: var(--navy);
-  color: var(--gold-light);
-  font-size: 12px;
-  font-weight: 900;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-}
-.rank-num.top1 { background: var(--metal-gold); color: var(--navy); }
-.rank-info { flex: 1; }
-.rank-name  { font-size: 13px; font-weight: 700; color: var(--navy); }
-.rank-sub   { font-size: 11px; color: var(--gray-500); }
-.rank-val   { font-size: 14px; font-weight: 900; color: var(--teal); direction: ltr; }
 
 /* ============================================================
    LOGIN PAGE
@@ -617,8 +556,11 @@ select.form-control { cursor: pointer; }
   .topbar-start { display: flex; align-items: center; min-width: 0; flex: 1; }
   .topbar-title { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .topbar-date { display: none; }
-  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
-  .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .kpi-card { padding: 14px 12px; gap: 10px; }
+  .kpi-icon { width: 38px; height: 38px; font-size: 18px; }
+  .kpi-value { font-size: 20px; }
   .topbar { padding: 0 12px; }
   .page-content { padding: 14px 12px; }
   .card-header { flex-wrap: wrap; gap: 8px; }
@@ -636,3 +578,42 @@ select.form-control { cursor: pointer; }
   .main { margin-right: 0; }
   .page-content { padding: 0; }
 }
+
+/* ============================================================
+   مكوّنات القالب الموحّد (includes/layout.php)
+   ============================================================ */
+.muted { color: var(--gray-500); } .small { font-size: 11.5px; } .center { text-align: center; } .mb { margin-bottom: 14px; }
+.green { color: var(--success); } .red { color: var(--danger); }
+td.empty { text-align: center; padding: 30px; color: var(--gray-500); }
+.section-title { font-weight: 800; color: var(--navy); margin: 4px 0 10px; }
+.bar { display: flex; align-items: center; gap: 6px; } .bar .progress-track { flex: 1; height: 7px; }
+form.inline { display: inline; }
+
+/* نماذج الفلترة */
+.filter-form { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 14px; }
+.filter-form .btn { width: auto; }
+.field label { display: block; font-size: 12px; font-weight: 700; color: var(--gray-700); margin-bottom: 4px; }
+.field .form-control { min-width: 150px; }
+.form-row .field, .modal .field { margin-bottom: 12px; }
+.modal-actions { display: flex; gap: 10px; margin-top: 14px; } .modal-actions .btn { flex: 1; }
+.btn-cancel { background: var(--gray-100); color: var(--text); }
+.alert-box.danger, .alert-box.info { margin-bottom: 14px; }
+
+/* صندوق رقم ملوّن */
+.stat-box { text-align: center; padding: 16px; border-radius: var(--radius); background: var(--gold-pale); }
+.stat-box.red { background: var(--danger-light); } .stat-box.green { background: var(--success-light); }
+.stat-label { font-size: 12px; font-weight: 700; color: var(--gray-700); margin-bottom: 6px; }
+.stat-value { font-size: 24px; font-weight: 900; color: var(--gold); }
+.stat-box.red .stat-value { color: var(--danger); } .stat-box.green .stat-value { color: var(--success); }
+.stat-sub { font-size: 11px; color: var(--gray-500); margin-top: 4px; }
+.center .stat-box { display: inline-block; padding: 14px 32px; margin-top: 14px; }
+
+/* شريط القناة الرقمية في لوحة الإدارة العليا */
+.strip { background: linear-gradient(135deg, var(--navy), var(--navy-mid)); border-radius: var(--radius); padding: 16px 22px;
+         margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 20px; align-items: center; }
+.strip-title { color: var(--gold); font-size: 14px; font-weight: 800; }
+.strip-item { border-right: 1px solid rgba(255,255,255,.1); padding-right: 20px; flex: 1; min-width: 110px; }
+.strip-label { color: rgba(255,255,255,.55); font-size: 10px; margin-bottom: 3px; }
+.strip-value { color: var(--white); font-size: 16px; font-weight: 800; }
+
+.login-hint { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--gray-100); font-size: 11.5px; color: var(--gray-500); text-align: center; }

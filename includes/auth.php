@@ -1,5 +1,6 @@
 <?php
-// ── الجلسات: على Vercel (بيئة بلا ملفات دائمة) تُحفظ في جدول sessions بالقاعدة ──
+// الجلسة والصلاحيات
+// نسخة النشر: على Vercel (بلا ملفات دائمة) تُحفظ الجلسات في جدول sessions عند SESSION_STORE=db
 if (session_status() === PHP_SESSION_NONE) {
     if (strtolower((string)getenv('SESSION_STORE')) === 'db') {
         require_once __DIR__ . '/session_handler.php';
@@ -14,63 +15,40 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Detect project base URL automatically (works in any subfolder e.g. /sbdas_a/)
+// الأدوار: الاسم العربي + مجلد صفحاتها
+const ROLES = [
+    'admin'           => ['مدير النظام',   'admin'],
+    'executive'       => ['الإدارة العليا', 'executive'],
+    'branch_manager'  => ['مدير الفرع',    'branch_manager'],
+    'branch_employee' => ['موظف الفرع',    'branch_manager'],
+];
+
+// مسار المشروع من جذر الخادم (يعمل داخل أي مجلد فرعي مثل /sbdas_lite)
 function base_url() {
-    // نسخة النشر: الجذر العام للموقع من متغير البيئة APP_BASE_URL (على Vercel القيمة / فتصبح النتيجة نصاً فارغاً)
+    // نسخة النشر: الجذر العام من APP_BASE_URL (على Vercel القيمة / فتصبح النتيجة نصاً فارغاً)
     $env = getenv('APP_BASE_URL');
     if ($env !== false && $env !== '') return rtrim($env, '/');
-    // __FILE__ is always in /includes/auth.php — go up one level to project root
-    $docRoot  = str_replace('\\', '/', $_SERVER['DOCUMENT_ROOT']);
-    $projRoot = str_replace('\\', '/', dirname(__DIR__)); // parent of includes/
-    $base     = str_replace($docRoot, '', $projRoot);
-    return rtrim($base, '/');
+    $doc  = str_replace('\\', '/', $_SERVER['DOCUMENT_ROOT']);
+    $root = str_replace('\\', '/', dirname(__DIR__));
+    return rtrim(str_replace($doc, '', $root), '/');
 }
 
-function is_logged_in() {
-    return isset($_SESSION['user_id']);
-}
-
-function require_login() {
-    if (!is_logged_in()) {
-        header('Location: ' . base_url() . '/login.php');
-        exit;
-    }
-}
-
-function require_role(...$roles) {
-    require_login();
-    if (!in_array($_SESSION['role'], $roles)) {
-        redirect_by_role($_SESSION['role']);
-    }
-}
+function is_logged_in() { return isset($_SESSION['user_id']); }
+function role_label($role) { return ROLES[$role][0] ?? $role; }
 
 function current_user() {
-    return [
-        'id'        => $_SESSION['user_id']   ?? null,
-        'name'      => $_SESSION['full_name'] ?? '',
-        'role'      => $_SESSION['role']      ?? '',
-        'branch_id' => $_SESSION['branch_id'] ?? null,
-    ];
-}
-
-function role_label($role) {
-    $map = [
-        'admin'           => 'مدير النظام',
-        'executive'       => 'الإدارة العليا',
-        'branch_manager'  => 'مدير الفرع',
-        'branch_employee' => 'موظف الفرع',
-    ];
-    return $map[$role] ?? $role;
+    return ['id' => $_SESSION['user_id'] ?? null, 'name' => $_SESSION['full_name'] ?? '',
+            'role' => $_SESSION['role'] ?? '', 'branch_id' => $_SESSION['branch_id'] ?? null];
 }
 
 function redirect_by_role($role) {
-    $map = [
-        'admin'           => 'pages/admin/dashboard.php',
-        'executive'       => 'pages/executive/dashboard.php',
-        'branch_manager'  => 'pages/branch_manager/dashboard.php',
-        'branch_employee' => 'pages/branch_manager/dashboard.php',
-    ];
-    $path = $map[$role] ?? 'login.php';
-    header('Location: ' . base_url() . '/' . $path);
+    $folder = ROLES[$role][1] ?? null;
+    header('Location: ' . base_url() . '/' . ($folder ? "pages/$folder/dashboard.php" : 'login.php'));
     exit;
+}
+
+// تسمح الصفحة بالأدوار المذكورة فقط؛ غير المسجّل يذهب للدخول، وغير المصرّح له إلى لوحته
+function require_role(...$roles) {
+    if (!is_logged_in()) { header('Location: ' . base_url() . '/login.php'); exit; }
+    if (!in_array($_SESSION['role'], $roles)) redirect_by_role($_SESSION['role']);
 }

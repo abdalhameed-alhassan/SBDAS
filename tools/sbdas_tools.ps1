@@ -1,5 +1,5 @@
 # SBDAS helper - run on YOUR PC (Windows PowerShell). The database password is typed here (hidden) and never saved or printed.
-# Menu: 1) import the SBDAS database  2) set a password for one user (e.g. admin)  3) remove SWIFT/RTGS from an existing database
+# Menu: 1) import the SBDAS database  2) set a password for one user (e.g. admin)  3) migrate an existing database to the SBDAS Lite structure (optional cleanup)
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
 function Read-Secret($label) {
@@ -11,8 +11,7 @@ function Stop-Here($msg) { Write-Host $msg -ForegroundColor Red; Read-Host 'Pres
 
 $proj = Split-Path -Parent $here
 $sql = Join-Path $proj 'database\database.sql'
-$mig = Join-Path $proj 'database\migrate_remove_swift_rtgs.sql'
-foreach ($p in @($sql, $mig, "$here\import_database.php", "$here\reset_password.php", "$here\migrate_remove_swift_rtgs.php")) { if (-not (Test-Path $p)) { Stop-Here "Missing file: $p" } }
+foreach ($p in @($sql, "$here\import_database.php", "$here\reset_password.php", "$here\migrate_to_lite.php")) { if (-not (Test-Path $p)) { Stop-Here "Missing file: $p" } }
 
 $php = $null
 $cmd = Get-Command php -ErrorAction SilentlyContinue
@@ -37,7 +36,7 @@ try {
     Write-Host "`nWhat do you want to do?"
     Write-Host "  1) Import the SBDAS database (first time only; creates the database if missing, refuses if it already has data)"
     Write-Host "  2) Set a password for one SBDAS user (e.g. admin)"
-    Write-Host "  3) Remove SWIFT/RTGS from the existing database (one time; old rows become BBAN)"
+    Write-Host "  3) Migrate the existing database to the Lite structure (optional; drops the 14 views + notifications table; data is untouched)"
     $c = (Read-Host 'Choose 1-3').Trim()
     switch ($c) {
         '1' { & $php "$here\import_database.php" $sql | Out-Host }
@@ -46,7 +45,7 @@ try {
             $env:RESET_PASSWORD = Read-Secret 'NEW password (min 8 chars, hidden)'
             & $php "$here\reset_password.php" | Out-Host
         }
-        '3' { & $php "$here\migrate_remove_swift_rtgs.php" $mig | Out-Host }
+        '3' { & $php "$here\migrate_to_lite.php" | Out-Host }
         default { Write-Host 'Nothing done.' }
     }
 } finally {

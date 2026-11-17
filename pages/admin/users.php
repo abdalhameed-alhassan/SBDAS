@@ -1,319 +1,89 @@
 <?php
-require_once '../../includes/db.php';
-require_once '../../includes/auth.php';
-require_once '../../includes/layout.php';
+require_once '../../includes/init.php';
 require_role('admin');
 
-$msg = '';
-$err = '';
-
-// ── معالجة الإجراءات ──
+$msg = $err = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? '';
-
+    $action = $_POST['action'];
+    $uid    = (int)($_POST['user_id'] ?? 0);
     if ($action === 'add') {
-        $full_name = trim($_POST['full_name'] ?? '');
-        $username  = trim($_POST['username']  ?? '');
-        $password  = $_POST['password'] ?? '';
-        $role      = $_POST['role']      ?? 'branch_employee';
-        $branch_id = (int)($_POST['branch_id'] ?? 1);
-
-        if (!$full_name || !$username || !$password) {
-            $err = 'يرجى ملء جميع الحقول المطلوبة.';
+        $name = trim($_POST['full_name']); $user = trim($_POST['username']); $pass = $_POST['password'];
+        if (!$name || !$user || strlen($pass) < 6) {
+            $err = 'يرجى ملء كل الحقول، وكلمة المرور 6 أحرف على الأقل.';
+        } elseif (run("SELECT 1 FROM users WHERE username=?", [$user])->get_result()->fetch_row()) {
+            $err = 'اسم المستخدم موجود مسبقاً.';
         } else {
-            // Check duplicate username
-            $chk = $conn->prepare("SELECT user_id FROM users WHERE username=?");
-            $chk->bind_param('s', $username);
-            $chk->execute();
-            if ($chk->get_result()->num_rows > 0) {
-                $err = 'اسم المستخدم موجود مسبقاً، اختر اسماً آخر.';
-            } else {
-                $hash = password_hash($password, PASSWORD_BCRYPT);
-                $stmt = $conn->prepare("INSERT INTO users (branch_id, full_name, username, password_hash, role) VALUES (?,?,?,?,?)");
-                $stmt->bind_param('issss', $branch_id, $full_name, $username, $hash, $role);
-                $stmt->execute();
-                $msg = 'تم إضافة المستخدم بنجاح.';
-            }
+            run("INSERT INTO users (branch_id, full_name, username, password_hash, role) VALUES (?,?,?,?,?)",
+                [$_POST['branch_id'], $name, $user, password_hash($pass, PASSWORD_BCRYPT), $_POST['role']]);
+            $msg = 'تمت إضافة المستخدم.';
         }
-    }
-
-    elseif ($action === 'toggle') {
-        $uid = (int)($_POST['user_id'] ?? 0);
-        if ($uid && $uid !== (int)$_SESSION['user_id']) {
-            $conn->query("UPDATE users SET is_active = 1 - is_active WHERE user_id = $uid");
-            $msg = 'تم تحديث حالة المستخدم.';
+    } elseif ($action === 'toggle' && $uid !== (int)$_SESSION['user_id']) {
+        $conn->query("UPDATE users SET is_active = 1 - is_active WHERE user_id = $uid");
+        $msg = 'تم تحديث حالة المستخدم.';
+    } elseif ($action === 'toggle') {
+        $err = 'لا يمكن تعطيل حسابك الخاص.';
+    } elseif ($action === 'reset_password') {
+        if (strlen($_POST['new_password']) < 6) {
+            $err = 'كلمة المرور 6 أحرف على الأقل.';
         } else {
-            $err = 'لا يمكن تعطيل حسابك الخاص.';
-        }
-    }
-
-    elseif ($action === 'reset_password') {
-        $uid      = (int)($_POST['user_id'] ?? 0);
-        $new_pass = $_POST['new_password'] ?? '';
-        if ($uid && strlen($new_pass) >= 6) {
-            $hash = password_hash($new_pass, PASSWORD_BCRYPT);
-            $stmt = $conn->prepare("UPDATE users SET password_hash=? WHERE user_id=?");
-            $stmt->bind_param('si', $hash, $uid);
-            $stmt->execute();
-            $msg = 'تم إعادة تعيين كلمة المرور بنجاح.';
-        } else {
-            $err = 'كلمة المرور يجب أن تكون 6 أحرف على الأقل.';
+            run("UPDATE users SET password_hash=? WHERE user_id=?", [password_hash($_POST['new_password'], PASSWORD_BCRYPT), $uid]);
+            $msg = 'تمت إعادة تعيين كلمة المرور.';
         }
     }
 }
 
-// ── جلب البيانات ──
-$filter_role   = $_GET['role']   ?? 'all';
-$filter_branch = $_GET['branch'] ?? 'all';
-$search        = trim($_GET['search'] ?? '');
-
+// البحث والتصفية
+$role = $_GET['role'] ?? 'all'; $branch = $_GET['branch'] ?? 'all'; $q = trim($_GET['search'] ?? '');
 $where = ['1=1'];
-if ($filter_role !== 'all')   $where[] = "u.role = '" . $conn->real_escape_string($filter_role) . "'";
-if ($filter_branch !== 'all') $where[] = "u.branch_id = " . (int)$filter_branch;
-if ($search)                  $where[] = "(u.full_name LIKE '%" . $conn->real_escape_string($search) . "%' OR u.username LIKE '%" . $conn->real_escape_string($search) . "%')";
-$whereSQL = implode(' AND ', $where);
-
-$users = [];
-$res = $conn->query("SELECT u.*, b.branch_name FROM users u LEFT JOIN branches b ON b.branch_id=u.branch_id WHERE $whereSQL ORDER BY u.created_at DESC");
-while ($r = $res->fetch_assoc()) $users[] = $r;
-
-$branches = [];
-$res2 = $conn->query("SELECT branch_id, branch_name FROM branches WHERE is_active=1 ORDER BY branch_id");
-while ($r = $res2->fetch_assoc()) $branches[] = $r;
-
-// Stats
-$stats = $conn->query("SELECT
-    COUNT(*) AS total,
-    SUM(is_active=1) AS active,
-    SUM(role='admin') AS admins,
-    SUM(role='executive') AS executives,
-    SUM(role='branch_manager') AS managers,
-    SUM(role='branch_employee') AS employees
-FROM users")->fetch_assoc();
+if (isset(ROLES[$role])) $where[] = "u.role='$role'";
+if ($branch !== 'all')   $where[] = 'u.branch_id=' . (int)$branch;
+if ($q !== '')           $where[] = "(u.full_name LIKE '%" . esc($q) . "%' OR u.username LIKE '%" . esc($q) . "%')";
+$users    = rows("SELECT u.*, b.branch_name FROM users u LEFT JOIN branches b ON b.branch_id=u.branch_id WHERE " . implode(' AND ', $where) . " ORDER BY u.created_at DESC, u.user_id DESC");
+$branches = rows("SELECT branch_id, branch_name FROM branches WHERE is_active=1 ORDER BY branch_id");
+$s = row("SELECT COUNT(*) AS total, SUM(is_active=1) AS active, SUM(role='branch_manager') AS managers, SUM(role='branch_employee') AS employees FROM users");
 
 open_layout('إدارة المستخدمين', 'users');
-?>
+kpi_grid([['👥', $s['total'], 'إجمالي المستخدمين', 'gold'], ['✅', $s['active'], 'نشطون', 'success'],
+          ['🏛️', $s['managers'], 'مديرو فروع', 'teal'], ['👤', $s['employees'], 'موظفو فروع', 'navy']]);
+if ($msg) echo '<div class="alert-box info">✅ ' . h($msg) . '</div>';
+if ($err) echo '<div class="alert-box danger">⚠️ ' . h($err) . '</div>';
 
-<!-- Stats -->
-<div class="kpi-grid" style="margin-bottom:20px">
-    <div class="kpi-card gold">
-        <div class="kpi-icon">👥</div>
-        <div class="kpi-body"><div class="kpi-value"><?= $stats['total'] ?></div><div class="kpi-label">إجمالي المستخدمين</div></div>
-    </div>
-    <div class="kpi-card success">
-        <div class="kpi-icon">✅</div>
-        <div class="kpi-body"><div class="kpi-value"><?= $stats['active'] ?></div><div class="kpi-label">نشطون</div></div>
-    </div>
-    <div class="kpi-card teal">
-        <div class="kpi-icon">🏛️</div>
-        <div class="kpi-body"><div class="kpi-value"><?= $stats['managers'] ?></div><div class="kpi-label">مديرو فروع</div></div>
-    </div>
-    <div class="kpi-card navy">
-        <div class="kpi-icon">👤</div>
-        <div class="kpi-body"><div class="kpi-value"><?= $stats['employees'] ?></div><div class="kpi-label">موظفو فروع</div></div>
-    </div>
-</div>
+$opt = fn($k, $v, $cur) => '<option value="' . $k . '"' . ($k == $cur ? ' selected' : '') . '>' . h($v) . '</option>';
+$roleOpts = $opt('all', 'كل الأدوار', $role); foreach (ROLES as $k => $r) $roleOpts .= $opt($k, $r[0], $role);
+$brOpts = $opt('all', 'كل الفروع', $branch);   foreach ($branches as $b) $brOpts .= $opt($b['branch_id'], $b['branch_name'], $branch);
+echo '<div class="card"><div class="card-body"><form method="get" class="filter-form">'
+   . field('بحث', '<input name="search" value="' . h($q) . '" placeholder="اسم أو اسم مستخدم" class="form-control">')
+   . field('الدور', '<select name="role" class="form-control">' . $roleOpts . '</select>')
+   . field('الفرع', '<select name="branch" class="form-control">' . $brOpts . '</select>')
+   . '<button class="btn btn-primary">🔍 بحث</button><button type="button" class="btn btn-gold" data-modal="addModal">+ مستخدم جديد</button></form></div></div>';
 
-<!-- Alerts -->
-<?php if ($msg): ?>
-<div class="alert-box info" style="margin-bottom:16px">
-    <span class="alert-icon">✅</span>
-    <div><div class="alert-msg"><?= htmlspecialchars($msg) ?></div></div>
-</div>
-<?php endif; ?>
-<?php if ($err): ?>
-<div class="alert-box danger" style="margin-bottom:16px">
-    <span class="alert-icon">⚠️</span>
-    <div><div class="alert-msg"><?= htmlspecialchars($err) ?></div></div>
-</div>
-<?php endif; ?>
-
-<!-- Filter + Add -->
-<div class="card" style="margin-bottom:20px">
-    <div class="card-body">
-        <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
-            <div>
-                <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px;color:var(--gray-700)">بحث</label>
-                <input type="text" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="اسم أو اسم مستخدم..." class="form-control" style="width:180px">
-            </div>
-            <div>
-                <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px;color:var(--gray-700)">الدور</label>
-                <select name="role" class="form-control" style="width:160px">
-                    <option value="all">كل الأدوار</option>
-                    <option value="admin"           <?= $filter_role==='admin'?'selected':'' ?>>مدير النظام</option>
-                    <option value="executive"       <?= $filter_role==='executive'?'selected':'' ?>>الإدارة العليا</option>
-                    <option value="branch_manager"  <?= $filter_role==='branch_manager'?'selected':'' ?>>مدير فرع</option>
-                    <option value="branch_employee" <?= $filter_role==='branch_employee'?'selected':'' ?>>موظف فرع</option>
-                </select>
-            </div>
-            <div>
-                <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px;color:var(--gray-700)">الفرع</label>
-                <select name="branch" class="form-control" style="width:160px">
-                    <option value="all">كل الفروع</option>
-                    <?php foreach ($branches as $b): ?>
-                    <option value="<?= $b['branch_id'] ?>" <?= $filter_branch==$b['branch_id']?'selected':'' ?>><?= htmlspecialchars($b['branch_name']) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <button type="submit" class="btn btn-primary" style="width:auto">🔍 بحث</button>
-            <a href="users.php" class="btn" style="width:auto;background:var(--gray-100);color:var(--gray-700)">إعادة تعيين</a>
-            <button type="button" onclick="document.getElementById('addModal').classList.add('open')" class="btn btn-gold" style="width:auto;margin-right:auto">+ مستخدم جديد</button>
-        </form>
-    </div>
-</div>
-
-<!-- Users Table -->
-<div class="card">
-    <div class="card-header">
-        <div class="card-title"><span class="icon">👥</span> المستخدمون</div>
-        <span class="badge badge-teal"><?= count($users) ?> مستخدم</span>
-    </div>
-    <div class="card-body" style="padding:0">
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>الاسم الكامل</th>
-                        <th>اسم المستخدم</th>
-                        <th>الدور</th>
-                        <th>الفرع</th>
-                        <th>الحالة</th>
-                        <th>تاريخ الإضافة</th>
-                        <th>إجراءات</th>
-                    </tr>
-                </thead>
-                <tbody>
-                <?php if (!$users): ?>
-                <tr><td colspan="8" style="text-align:center;padding:30px;color:var(--gray-500)">لا توجد نتائج</td></tr>
-                <?php endif; ?>
-                <?php foreach ($users as $u): ?>
-                <tr>
-                    <td style="color:var(--gray-500);font-size:12px"><?= $u['user_id'] ?></td>
-                    <td><strong><?= htmlspecialchars($u['full_name']) ?></strong></td>
-                    <td dir="ltr" style="font-family:monospace;font-size:13px;color:var(--teal)"><?= htmlspecialchars($u['username']) ?></td>
-                    <td>
-                        <?php
-                        $roleColors = ['admin'=>'navy','executive'=>'gold','branch_manager'=>'teal','branch_employee'=>'gray'];
-                        $rc = $roleColors[$u['role']] ?? 'gray';
-                        ?>
-                        <span class="badge badge-<?= $rc ?>"><?= role_label($u['role']) ?></span>
-                    </td>
-                    <td><?= htmlspecialchars($u['branch_name'] ?? '—') ?></td>
-                    <td>
-                        <?= $u['is_active']
-                            ? '<span class="badge badge-success">نشط</span>'
-                            : '<span class="badge badge-danger">معطّل</span>' ?>
-                    </td>
-                    <td style="font-size:11px;color:var(--gray-500)"><?= date('Y-m-d', strtotime($u['created_at'])) ?></td>
-                    <td>
-                        <div style="display:flex;gap:6px;flex-wrap:wrap">
-                            <!-- Toggle -->
-                            <form method="POST" style="display:inline">
-                                <input type="hidden" name="action" value="toggle">
-                                <input type="hidden" name="user_id" value="<?= $u['user_id'] ?>">
-                                <button type="submit" class="btn btn-sm"
-                                    style="background:<?= $u['is_active']?'var(--danger-light)':'var(--success-light)' ?>;color:<?= $u['is_active']?'var(--danger)':'var(--success)' ?>"
-                                    onclick="return confirm('هل أنت متأكد؟')">
-                                    <?= $u['is_active'] ? 'تعطيل' : 'تفعيل' ?>
-                                </button>
-                            </form>
-                            <!-- Reset Password -->
-                            <button onclick="openReset(<?= $u['user_id'] ?>, '<?= htmlspecialchars($u['full_name'], ENT_QUOTES) ?>')"
-                                class="btn btn-sm" style="background:var(--warn-light);color:var(--warn)">
-                                🔑 كلمة المرور
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<!-- ── Add User Modal ── -->
-<div class="modal-backdrop" id="addModal">
-    <div class="modal">
-        <div class="modal-title">➕ إضافة مستخدم جديد</div>
-        <form method="POST">
-            <input type="hidden" name="action" value="add">
-            <div class="form-row">
-                <div class="form-group">
-                    <label style="font-size:12px;font-weight:700;display:block;margin-bottom:5px">الاسم الكامل *</label>
-                    <input type="text" name="full_name" class="form-control" required placeholder="محمد أحمد...">
-                </div>
-                <div class="form-group">
-                    <label style="font-size:12px;font-weight:700;display:block;margin-bottom:5px">اسم المستخدم *</label>
-                    <input type="text" name="username" class="form-control" dir="ltr" required placeholder="user123">
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label style="font-size:12px;font-weight:700;display:block;margin-bottom:5px">كلمة المرور *</label>
-                    <input type="password" name="password" class="form-control" required placeholder="6 أحرف على الأقل">
-                </div>
-                <div class="form-group">
-                    <label style="font-size:12px;font-weight:700;display:block;margin-bottom:5px">الدور</label>
-                    <select name="role" class="form-control">
-                        <option value="branch_employee">موظف فرع</option>
-                        <option value="branch_manager">مدير فرع</option>
-                        <option value="executive">إدارة عليا</option>
-                        <option value="admin">مدير نظام</option>
-                    </select>
-                </div>
-            </div>
-            <div class="form-group">
-                <label style="font-size:12px;font-weight:700;display:block;margin-bottom:5px">الفرع</label>
-                <select name="branch_id" class="form-control">
-                    <?php foreach ($branches as $b): ?>
-                    <option value="<?= $b['branch_id'] ?>"><?= htmlspecialchars($b['branch_name']) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div style="display:flex;gap:10px;margin-top:14px">
-                <button type="submit" class="btn btn-primary" style="flex:1">💾 حفظ</button>
-                <button type="button" onclick="document.getElementById('addModal').classList.remove('open')"
-                    class="btn" style="flex:1;background:var(--gray-100);color:var(--text)">إلغاء</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- ── Reset Password Modal ── -->
-<div class="modal-backdrop" id="resetModal">
-    <div class="modal">
-        <div class="modal-title">🔑 إعادة تعيين كلمة المرور</div>
-        <p id="resetUserName" style="font-size:13px;color:var(--gray-500);margin-bottom:16px"></p>
-        <form method="POST">
-            <input type="hidden" name="action" value="reset_password">
-            <input type="hidden" name="user_id" id="resetUserId">
-            <div class="form-group">
-                <label style="font-size:12px;font-weight:700;display:block;margin-bottom:5px">كلمة المرور الجديدة *</label>
-                <input type="password" name="new_password" id="newPassword" class="form-control" required placeholder="6 أحرف على الأقل">
-            </div>
-            <div style="display:flex;gap:10px;margin-top:14px">
-                <button type="submit" class="btn btn-primary" style="flex:1">تحديث</button>
-                <button type="button" onclick="document.getElementById('resetModal').classList.remove('open')"
-                    class="btn" style="flex:1;background:var(--gray-100);color:var(--text)">إلغاء</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<script>
-function openReset(id, name) {
-    document.getElementById('resetUserId').value = id;
-    document.getElementById('resetUserName').textContent = 'المستخدم: ' + name;
-    document.getElementById('newPassword').value = '';
-    document.getElementById('resetModal').classList.add('open');
+$rows = [];
+foreach ($users as $u) {
+    $id = (int)$u['user_id'];
+    $rows[] = [$id, '<b>' . h($u['full_name']) . '</b>', '<span dir="ltr">' . h($u['username']) . '</span>', badge(role_label($u['role'])),
+               h($u['branch_name'] ?? '—'), badge($u['is_active'] ? 'نشط' : 'معطّل', $u['is_active'] ? 'success' : 'danger'),
+               '<form method="post" class="inline"><input type="hidden" name="action" value="toggle"><input type="hidden" name="user_id" value="' . $id . '">'
+               . '<button class="btn btn-sm" onclick="return confirm(\'هل أنت متأكد؟\')">' . ($u['is_active'] ? 'تعطيل' : 'تفعيل') . '</button></form> '
+               . '<button class="btn btn-sm" data-modal="resetModal" onclick="resetFor(' . $id . ',this.dataset.name)" data-name="' . h($u['full_name']) . '">🔑 كلمة المرور</button>'];
 }
-['addModal','resetModal'].forEach(id => {
-    document.getElementById(id).addEventListener('click', function(e) {
-        if (e.target === this) this.classList.remove('open');
-    });
-});
-</script>
-
-<?php close_layout(); ?>
+table_card('المستخدمون', '👥', ['#','الاسم الكامل','اسم المستخدم','الدور','الفرع','الحالة','إجراءات'], $rows, badge(count($users) . ' مستخدم'));
+?>
+<div class="modal-backdrop" id="addModal"><div class="modal">
+  <div class="modal-title">➕ إضافة مستخدم جديد</div>
+  <form method="post"><input type="hidden" name="action" value="add">
+    <div class="form-row"><?= field('الاسم الكامل', '<input name="full_name" class="form-control" required>') . field('اسم المستخدم', '<input name="username" class="form-control" dir="ltr" required>') ?></div>
+    <div class="form-row"><?= field('كلمة المرور', '<input type="password" name="password" class="form-control" placeholder="6 أحرف على الأقل" required>')
+        . field('الدور', '<select name="role" class="form-control">' . implode('', array_map(fn($k) => $opt($k, ROLES[$k][0], 'branch_employee'), array_keys(ROLES))) . '</select>') ?></div>
+    <?= field('الفرع', '<select name="branch_id" class="form-control">' . implode('', array_map(fn($b) => $opt($b['branch_id'], $b['branch_name'], 0), $branches)) . '</select>') ?>
+    <div class="modal-actions"><button class="btn btn-primary">حفظ</button><button type="button" class="btn btn-cancel" data-close>إلغاء</button></div>
+  </form>
+</div></div>
+<div class="modal-backdrop" id="resetModal"><div class="modal">
+  <div class="modal-title">🔑 إعادة تعيين كلمة المرور</div><p class="muted" id="resetName"></p>
+  <form method="post"><input type="hidden" name="action" value="reset_password"><input type="hidden" name="user_id" id="resetId">
+    <?= field('كلمة المرور الجديدة', '<input type="password" name="new_password" class="form-control" placeholder="6 أحرف على الأقل" required>') ?>
+    <div class="modal-actions"><button class="btn btn-primary">تحديث</button><button type="button" class="btn btn-cancel" data-close>إلغاء</button></div>
+  </form>
+</div></div>
+<script>function resetFor(id, name){ document.getElementById('resetId').value=id; document.getElementById('resetName').textContent='المستخدم: '+name; }</script>
+<?php close_layout();

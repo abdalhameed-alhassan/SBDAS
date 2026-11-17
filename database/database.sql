@@ -1,12 +1,12 @@
 -- ============================================================
--- SBDAS — ملف قاعدة البيانات لنسخة النشر (Aiven MySQL / أي MySQL 8)
+-- SBDAS Lite — ملف قاعدة البيانات لنسخة النشر (Aiven MySQL / أي MySQL 8)
 -- ============================================================
 -- يُستورد على قاعدة فارغة موجودة مسبقاً (اسمها في DB_NAME، مثلاً sbdas).
 -- لا يحتوي DROP DATABASE ولا CREATE DATABASE ولا USE، ولا يمسّ قواعد أخرى.
--- كلمات مرور المستخدمين: مشفّرة بقيمة عشوائية غير معروفة لأحد، فلا يمكن الدخول
--- بأسماء المستخدمين من الواجهة؛ الدخول يتم عبر زرّي الدخول التجريبي (DEMO_LOGIN=1)،
--- ولتفعيل حساب بكلمة مرور استعمل tools/reset_password.php.
--- يضيف جدول sessions (تخزين الجلسات في القاعدة لأن Vercel بلا ملفات دائمة).
+-- 11 جدولاً للنظام بلا Views وبلا جدول إشعارات. كلمات مرور المستخدمين مشفّرة بقيمة عشوائية
+-- غير معروفة لأحد: الدخول عبر زرّي الدخول التجريبي (DEMO_LOGIN=1)، ولتفعيل حساب بكلمة مرور
+-- استعمل tools/reset_password.php (الخيار 2 في tools/sbdas_tools.ps1).
+-- يضيف جدول sessions فقط لأن Vercel بلا ملفات دائمة (تخزين الجلسات؛ ليس من كيانات النظام).
 -- ============================================================
 
 SET NAMES utf8mb4;
@@ -149,17 +149,6 @@ CREATE TABLE complaints (
     FOREIGN KEY (branch_id)   REFERENCES branches(branch_id)
 ) ENGINE=InnoDB;
 
-CREATE TABLE notifications (
-    notif_id  INT AUTO_INCREMENT PRIMARY KEY,
-    branch_id INT,
-    type      ENUM('warning','alert','info') DEFAULT 'info',
-    title     VARCHAR(200) NOT NULL,
-    message   TEXT NOT NULL,
-    is_read   TINYINT(1) DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (branch_id) REFERENCES branches(branch_id)
-) ENGINE=InnoDB;
-
 -- ── القنوات الرقمية: مستخدمو التطبيق وجلساته ──
 CREATE TABLE app_users (
     app_user_id   INT AUTO_INCREMENT PRIMARY KEY,
@@ -182,6 +171,16 @@ CREATE TABLE app_sessions (
     FOREIGN KEY (branch_id)   REFERENCES branches(branch_id)
 ) ENGINE=InnoDB;
 
+-- ── جدول الجلسات (لنسخة النشر) ──
+CREATE TABLE IF NOT EXISTS sessions (
+    id          VARCHAR(128) NOT NULL PRIMARY KEY,
+    data        MEDIUMTEXT   NOT NULL,
+    user_id     INT          NULL,
+    created_at  INT UNSIGNED NOT NULL,
+    last_access INT UNSIGNED NOT NULL,
+    KEY idx_sessions_last_access (last_access)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- ============================================================
@@ -199,228 +198,7 @@ ALTER TABLE internal_transfers ADD INDEX idx_itransfer_date        (created_at);
 ALTER TABLE external_transfers ADD INDEX idx_extransfer_date       (created_at);
 
 -- ============================================================
--- 3) الـ Views — الصفحات تقرأ من هنا ولا تجمّع من الجداول الخام
--- ============================================================
-
--- ── ملخص الفروع (يُستخدم في لوحات الإدارة العليا ومدير الفرع) ──
--- ملاحظة تصميم: كل مقياس يُحسب في استعلام فرعي مجمَّع على مستوى الفرع
--- أولاً، ثم تُربط النتائج الصغيرة. ربط الجداول الخام ببعضها مباشرة
--- (عملاء × حسابات × عمليات × قروض × شكاوى) يولّد ضرباً ديكارتياً
--- ويعلّق الاستعلام مع البيانات الكبيرة.
-CREATE OR REPLACE VIEW vw_branch_summary AS
-SELECT
-    b.branch_id, b.branch_name, b.city, b.state,
-    COALESCE(cst.total_customers, 0)     AS total_customers,
-    COALESCE(acc.total_accounts, 0)      AS total_accounts,
-    COALESCE(txn.total_deposits, 0)      AS total_deposits,
-    COALESCE(txn.total_withdrawals, 0)   AS total_withdrawals,
-    COALESCE(txn.total_transfers, 0)     AS total_transfers,
-    COALESCE(txn.total_txn_count, 0)     AS total_txn_count,
-    COALESCE(ln.active_loans, 0)         AS active_loans,
-    COALESCE(ln.defaulted_loans, 0)      AS defaulted_loans,
-    COALESCE(cmp.open_complaints, 0)     AS open_complaints
-FROM branches b
-LEFT JOIN (
-    SELECT branch_id, COUNT(*) AS total_customers
-    FROM customers WHERE is_active=1 GROUP BY branch_id
-) cst ON cst.branch_id = b.branch_id
-LEFT JOIN (
-    SELECT branch_id, COUNT(*) AS total_accounts
-    FROM accounts GROUP BY branch_id
-) acc ON acc.branch_id = b.branch_id
-LEFT JOIN (
-    SELECT branch_id,
-        SUM(CASE WHEN txn_type='deposit'    THEN amount END) AS total_deposits,
-        SUM(CASE WHEN txn_type='withdrawal' THEN amount END) AS total_withdrawals,
-        SUM(CASE WHEN txn_type IN('transfer_in','transfer_out') THEN amount END) AS total_transfers,
-        COUNT(*) AS total_txn_count
-    FROM transactions WHERE status='completed' GROUP BY branch_id
-) txn ON txn.branch_id = b.branch_id
-LEFT JOIN (
-    SELECT branch_id,
-        COUNT(CASE WHEN status='active'    THEN 1 END) AS active_loans,
-        COUNT(CASE WHEN status='defaulted' THEN 1 END) AS defaulted_loans
-    FROM loans GROUP BY branch_id
-) ln ON ln.branch_id = b.branch_id
-LEFT JOIN (
-    SELECT branch_id, COUNT(*) AS open_complaints
-    FROM complaints WHERE status IN('open','in_progress') GROUP BY branch_id
-) cmp ON cmp.branch_id = b.branch_id
-WHERE b.is_active=1;
-
--- ── تفصيل الحركات حسب النوع لكل فرع ──
--- تفصيل السحوبات حسب النوع لكل فرع
-CREATE OR REPLACE VIEW vw_branch_withdrawal_breakdown AS
-SELECT
-    b.branch_id, b.branch_name,
-    COALESCE(SUM(CASE WHEN t.sub_type='cash'         THEN t.amount END),0) AS wd_cash,
-    COALESCE(SUM(CASE WHEN t.sub_type='cheque'       THEN t.amount END),0) AS wd_cheque,
-    COALESCE(SUM(CASE WHEN t.sub_type='app_transfer' THEN t.amount END),0) AS wd_app,
-    COALESCE(SUM(CASE WHEN t.sub_type='atm'          THEN t.amount END),0) AS wd_atm,
-    COALESCE(SUM(CASE WHEN t.sub_type='pos'          THEN t.amount END),0) AS wd_pos,
-    COALESCE(SUM(CASE WHEN t.sub_type='internal_transfer' THEN t.amount END),0) AS wd_internal,
-    COUNT(CASE WHEN t.sub_type='cash'         THEN 1 END) AS wd_cash_count,
-    COUNT(CASE WHEN t.sub_type='cheque'       THEN 1 END) AS wd_cheque_count,
-    COUNT(CASE WHEN t.sub_type='app_transfer' THEN 1 END) AS wd_app_count,
-    COUNT(CASE WHEN t.sub_type='atm'          THEN 1 END) AS wd_atm_count,
-    COUNT(CASE WHEN t.sub_type='pos'          THEN 1 END) AS wd_pos_count
-FROM branches b
-LEFT JOIN transactions t ON t.branch_id=b.branch_id
-    AND t.txn_type='withdrawal' AND t.status='completed'
-WHERE b.is_active=1
-GROUP BY b.branch_id, b.branch_name;
-
--- تفصيل الإيداعات حسب النوع لكل فرع
-CREATE OR REPLACE VIEW vw_branch_deposit_breakdown AS
-SELECT
-    b.branch_id, b.branch_name,
-    COALESCE(SUM(CASE WHEN t.sub_type='cash'         THEN t.amount END),0) AS dep_cash,
-    COALESCE(SUM(CASE WHEN t.sub_type='cheque'       THEN t.amount END),0) AS dep_cheque,
-    COALESCE(SUM(CASE WHEN t.sub_type='app_transfer' THEN t.amount END),0) AS dep_app,
-    COALESCE(SUM(CASE WHEN t.sub_type='bban'         THEN t.amount END),0) AS dep_bban,
-    COUNT(CASE WHEN t.sub_type='cash'   THEN 1 END) AS dep_cash_count,
-    COUNT(CASE WHEN t.sub_type='cheque' THEN 1 END) AS dep_cheque_count,
-    COUNT(CASE WHEN t.sub_type='app_transfer' THEN 1 END) AS dep_app_count,
-    COUNT(CASE WHEN t.sub_type='bban'   THEN 1 END) AS dep_bban_count
-FROM branches b
-LEFT JOIN transactions t ON t.branch_id=b.branch_id
-    AND t.txn_type='deposit' AND t.status='completed'
-WHERE b.is_active=1
-GROUP BY b.branch_id, b.branch_name;
-
--- تفصيل التحويلات حسب النوع
-CREATE OR REPLACE VIEW vw_branch_transfer_breakdown AS
-SELECT
-    b.branch_id, b.branch_name,
-    COALESCE(SUM(CASE WHEN t.sub_type='app_transfer'      THEN t.amount END),0) AS tr_app,
-    COALESCE(SUM(CASE WHEN t.sub_type='internal_transfer' THEN t.amount END),0) AS tr_internal,
-    COALESCE(SUM(CASE WHEN t.sub_type='bban'              THEN t.amount END),0) AS tr_bban,
-    COUNT(CASE WHEN t.sub_type='app_transfer'      THEN 1 END) AS tr_app_count,
-    COUNT(CASE WHEN t.sub_type='internal_transfer' THEN 1 END) AS tr_internal_count,
-    COUNT(CASE WHEN t.sub_type='bban'              THEN 1 END) AS tr_bban_count
-FROM branches b
-LEFT JOIN transactions t ON t.branch_id=b.branch_id
-    AND t.txn_type IN('transfer_in','transfer_out') AND t.status='completed'
-WHERE b.is_active=1
-GROUP BY b.branch_id, b.branch_name;
-
--- ── أكثر الحسابات تحويلاً ونشاطاً ──
--- (للبيانات الضخمة: استخدمي bigdata_tuning.sql لتحويلهما إلى جدول مجمَّع جاهز)
-CREATE OR REPLACE VIEW vw_top_accounts_by_transfers AS
-SELECT a.account_id, cu.full_name AS customer_name, b.branch_name,
-    COUNT(t.txn_id) AS transfer_count,
-    SUM(t.amount)   AS total_transferred
-FROM accounts a
-JOIN customers cu ON cu.customer_id=a.customer_id
-JOIN branches  b  ON b.branch_id=a.branch_id
-JOIN transactions t ON t.account_id=a.account_id
-    AND t.txn_type IN('transfer_in','transfer_out') AND t.status='completed'
-GROUP BY a.account_id,cu.full_name,b.branch_name
-ORDER BY total_transferred DESC LIMIT 10;
-
-CREATE OR REPLACE VIEW vw_top_accounts_by_activity AS
-SELECT a.account_id, cu.full_name AS customer_name, b.branch_name,
-    COUNT(t.txn_id) AS total_operations,
-    SUM(t.amount)   AS total_volume,
-    SUM(CASE WHEN t.txn_type='deposit'    THEN t.amount END) AS vol_deposit,
-    SUM(CASE WHEN t.txn_type='withdrawal' THEN t.amount END) AS vol_withdrawal,
-    SUM(CASE WHEN t.txn_type IN('transfer_in','transfer_out') THEN t.amount END) AS vol_transfer,
-    COUNT(CASE WHEN t.txn_type='deposit'    THEN 1 END) AS cnt_deposit,
-    COUNT(CASE WHEN t.txn_type='withdrawal' THEN 1 END) AS cnt_withdrawal,
-    COUNT(CASE WHEN t.txn_type IN('transfer_in','transfer_out') THEN 1 END) AS cnt_transfer
-FROM accounts a
-JOIN customers cu ON cu.customer_id=a.customer_id
-JOIN branches  b  ON b.branch_id=a.branch_id
-JOIN transactions t ON t.account_id=a.account_id AND t.status='completed'
-GROUP BY a.account_id,cu.full_name,b.branch_name
-ORDER BY total_volume DESC LIMIT 10;
-
--- ── القنوات الرقمية والتحويلات الداخلية والخارجية ──
-CREATE OR REPLACE VIEW vw_app_summary AS
-SELECT
-    COUNT(DISTINCT au.app_user_id) AS total_app_users,
-    COUNT(DISTINCT CASE WHEN au.is_active=1 THEN au.app_user_id END) AS active_app_users,
-    COUNT(DISTINCT CASE WHEN au.device_type='android' THEN au.app_user_id END) AS android_users,
-    COUNT(DISTINCT CASE WHEN au.device_type='ios'     THEN au.app_user_id END) AS ios_users,
-    COUNT(DISTINCT CASE WHEN au.device_type='web'     THEN au.app_user_id END) AS web_users,
-    COUNT(DISTINCT CASE WHEN au.last_login >= DATE_SUB(NOW(),INTERVAL 30 DAY) THEN au.app_user_id END) AS active_last_30d,
-    COUNT(s.session_id) AS total_sessions,
-    COUNT(CASE WHEN s.action_type='transfer' THEN 1 END) AS app_transfers,
-    COALESCE(SUM(CASE WHEN s.action_type='transfer' THEN s.amount END),0) AS app_transfer_volume
-FROM app_users au
-LEFT JOIN app_sessions s ON s.app_user_id=au.app_user_id;
-
-CREATE OR REPLACE VIEW vw_channel_comparison AS
-SELECT 'تطبيق جوال / ويب' AS channel,
-    COUNT(*) AS operation_count,
-    COALESCE(SUM(amount),0) AS total_volume
-FROM app_sessions WHERE action_type IN('transfer','payment','deposit_request')
-UNION ALL
-SELECT 'فروع مباشرة', COUNT(*), COALESCE(SUM(amount),0)
-FROM transactions
-WHERE status='completed' AND txn_type IN('deposit','withdrawal','transfer_out');
-
-CREATE OR REPLACE VIEW vw_app_monthly AS
-SELECT DATE_FORMAT(created_at,'%Y-%m') AS month,
-    COUNT(*) AS sessions,
-    COUNT(DISTINCT app_user_id) AS unique_users,
-    COUNT(CASE WHEN action_type='transfer' THEN 1 END) AS transfers
-FROM app_sessions
-GROUP BY DATE_FORMAT(created_at,'%Y-%m');
-
-CREATE OR REPLACE VIEW vw_internal_transfer_summary AS
-SELECT
-    transfer_type,
-    channel,
-    COUNT(*)     AS count,
-    SUM(amount)  AS total_amount,
-    AVG(amount)  AS avg_amount
-FROM internal_transfers
-WHERE status='completed'
-GROUP BY transfer_type, channel;
-
--- ── نمو العملاء الشهري ──
-CREATE OR REPLACE VIEW vw_monthly_growth AS
-SELECT
-    DATE_FORMAT(created_at,'%Y-%m') AS month,
-    COUNT(*) AS new_customers
-FROM customers
-WHERE is_active=1
-GROUP BY DATE_FORMAT(created_at,'%Y-%m');
-
-CREATE OR REPLACE VIEW vw_external_bank_summary AS
-SELECT external_bank,
-    SUM(CASE WHEN direction='inbound'  THEN amount ELSE 0 END) AS total_inbound,
-    SUM(CASE WHEN direction='outbound' THEN amount ELSE 0 END) AS total_outbound,
-    SUM(CASE WHEN direction='inbound'  THEN amount ELSE 0 END)
-    - SUM(CASE WHEN direction='outbound' THEN amount ELSE 0 END) AS net_balance,
-    COUNT(CASE WHEN direction='inbound'  THEN 1 END) AS inbound_count,
-    COUNT(CASE WHEN direction='outbound' THEN 1 END) AS outbound_count
-FROM external_transfers WHERE status='completed'
-GROUP BY external_bank;
-
-CREATE OR REPLACE VIEW vw_external_flow_monthly AS
-SELECT DATE_FORMAT(created_at,'%Y-%m') AS month,
-    SUM(CASE WHEN direction='inbound'  THEN amount ELSE 0 END) AS inbound,
-    SUM(CASE WHEN direction='outbound' THEN amount ELSE 0 END) AS outbound
-FROM external_transfers WHERE status='completed'
-GROUP BY DATE_FORMAT(created_at,'%Y-%m');
-
-CREATE OR REPLACE VIEW vw_inter_branch_flow AS
-SELECT b.branch_name,
-    COALESCE(SUM(CASE WHEN it.from_branch_id=b.branch_id THEN it.amount END),0) AS sent,
-    COALESCE(SUM(CASE WHEN it.to_branch_id=b.branch_id   THEN it.amount END),0) AS received,
-    COALESCE(SUM(CASE WHEN it.to_branch_id=b.branch_id   THEN it.amount END),0)
-    - COALESCE(SUM(CASE WHEN it.from_branch_id=b.branch_id THEN it.amount END),0) AS net_flow
-FROM branches b
-LEFT JOIN internal_transfers it
-    ON (it.from_branch_id=b.branch_id OR it.to_branch_id=b.branch_id)
-    AND it.transfer_type='inter_branch' AND it.status='completed'
-WHERE b.is_active=1
-GROUP BY b.branch_id,b.branch_name;
-
--- ============================================================
--- 4) البيانات التجريبية
+-- 3) البيانات التجريبية
 -- بنك متوسط الحجم: 8 فروع، 80 عميلاً، مبالغ بالجنيه السوداني
 -- (سعر الدولار المفترض 5500 جنيه). بيانات منطقية ومترابطة لأغراض
 -- الاختبار والمحاكاة وليست بيانات بنك حقيقي.
@@ -795,14 +573,6 @@ INSERT INTO complaints (customer_id,branch_id,subject,status,opened_at,resolved_
 (75,7,'صعوبة في سداد القرض إلكترونياً','open','2026-05-25 09:00:00',NULL);
 
 -- تنبيهات
-INSERT INTO notifications (branch_id,type,title,message) VALUES
-(2,'warning','ارتفاع الشكاوى في فرع أم درمان','3 شكاوى مفتوحة هذا الشهر، أعلى من المعدل المقبول.'),
-(4,'alert','حساب مجمّد دون معالجة','الحساب رقم 58 مجمّد منذ أكثر من 30 يوماً.'),
-(NULL,'warning','4 قروض متعثرة','يُنصح بمراجعة سياسة الإقراض وتفعيل إجراءات التحصيل.'),
-(3,'info','نمو ملحوظ في فرع بحري','زيادة 18% في عدد العملاء خلال الربع الأخير.'),
-(5,'alert','ارتفاع السحوبات النقدية','سجّل فرع ود مدني ارتفاعاً غير معتاد في السحوبات النقدية.'),
-(NULL,'info','تفعيل خدمة BBAN','ارتفاع ملحوظ في استخدام تحويلات BBAN خلال الشهر الماضي. ينصح بتوسيع الطاقة الاستيعابية.');
-
 -- مستخدمو التطبيق (60% من العملاء)
 INSERT INTO app_users (customer_id,device_type,registered_at,last_login,is_active) VALUES
 (1,'android','2024-01-15 10:00:00','2026-06-29 08:00:00',1),
@@ -1063,7 +833,7 @@ INSERT INTO internal_transfers (from_account_id,to_account_id,from_branch_id,to_
 (24,4,2,1, 280000.00,'inter_branch','branch','2026-05-15 10:00:00');
 
 -- ============================================================
--- 5) استعلام تحقق — يجب أن تظهر الأعداد التالية بعد الاستيراد
+-- 4) استعلام تحقق — يجب أن تظهر الأعداد التالية بعد الاستيراد
 -- ============================================================
 SELECT 'branches' AS tbl, COUNT(*) AS `rows` FROM branches
 UNION ALL SELECT 'users',              COUNT(*) FROM users
@@ -1074,16 +844,5 @@ UNION ALL SELECT 'internal_transfers', COUNT(*) FROM internal_transfers
 UNION ALL SELECT 'external_transfers', COUNT(*) FROM external_transfers
 UNION ALL SELECT 'loans',              COUNT(*) FROM loans
 UNION ALL SELECT 'complaints',         COUNT(*) FROM complaints
-UNION ALL SELECT 'notifications',      COUNT(*) FROM notifications
 UNION ALL SELECT 'app_users',          COUNT(*) FROM app_users
 UNION ALL SELECT 'app_sessions',       COUNT(*) FROM app_sessions;
-
--- ── جدول الجلسات (لنسخة النشر) ──
-CREATE TABLE IF NOT EXISTS sessions (
-    id          VARCHAR(128) NOT NULL PRIMARY KEY,
-    data        MEDIUMTEXT   NOT NULL,
-    user_id     INT          NULL,
-    created_at  INT UNSIGNED NOT NULL,
-    last_access INT UNSIGNED NOT NULL,
-    KEY idx_sessions_last_access (last_access)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
