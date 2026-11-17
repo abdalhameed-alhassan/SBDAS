@@ -46,13 +46,25 @@ function page_reports($bid) {
                             WHERE status='completed' AND {$between('created_at')} GROUP BY from_account_id, to_account_id HAVING n>1) p
                         GROUP BY from_account_id) r ON r.account_id=a.account_id
              WHERE 1=1 {$in('a')} ORDER BY " . ['volume' => 'v.vol', 'count' => 'v.cnt', 'recurring' => 'rec'][$sort] . " DESC LIMIT 200"],
+        // ── التقارير الرقمية (بديل صفحة التحليل الرقمي): تفصيل شهري/حسب البنك فقط؛ الإجماليات في الشريط الرقمي بلوحة الإدارة ──
+        'app' => ['نشاط تطبيق الجوال (شهرياً)', ['الشهر','مستخدمون نشطون','عمليات دخول','عمليات مالية','قيمتها (SDG)'],
+            "SELECT DATE_FORMAT(s.created_at,'%Y-%m') AS m, COUNT(DISTINCT s.app_user_id) AS users,
+                    SUM(s.action_type='login') AS logins, SUM(s.action_type IN ('transfer','payment','deposit_request')) AS ops,
+                    COALESCE(SUM(s.amount),0) AS amt
+             FROM app_sessions s WHERE {$between('s.created_at')} {$in('s')} GROUP BY m ORDER BY m DESC"],
+        'banks' => ['الحركة مع البنوك الأخرى (حسب البنك)', ['البنك','عدد الوارد','قيمة الوارد (SDG)','عدد الصادر','قيمة الصادر (SDG)','الصافي (SDG)'],
+            "SELECT e.external_bank, SUM(e.direction='inbound') AS n_in, SUM(CASE WHEN e.direction='inbound' THEN e.amount ELSE 0 END) AS v_in,
+                    SUM(e.direction='outbound') AS n_out, SUM(CASE WHEN e.direction='outbound' THEN e.amount ELSE 0 END) AS v_out,
+                    SUM(CASE WHEN e.direction='inbound' THEN e.amount ELSE -e.amount END) AS net
+             FROM external_transfers e WHERE e.status='completed' AND {$between('e.created_at')} {$in('e')}
+             GROUP BY e.external_bank ORDER BY SUM(e.amount) DESC"],
     ];
     $type = isset($reports[$_GET['type'] ?? '']) ? $_GET['type'] : 'transactions';
     [$title, $headers, $sql] = $reports[$type];
 
     // تحويل القيم إلى نص عربي/أرقام منسّقة بحسب اسم العمود
     $labels = ['txn_type' => L_TXN, 'sub_type' => L_SUB, 'status' => L_STATUS, 'account_type' => L_ACCOUNT, 'gender' => L_GENDER];
-    $money  = ['amount', 'balance', 'paid_amount', 'remaining', 'vol', 'cnt', 'rec'];
+    $money  = ['amount', 'balance', 'paid_amount', 'remaining', 'vol', 'cnt', 'rec', 'users', 'logins', 'ops', 'amt', 'n_in', 'v_in', 'n_out', 'v_out', 'net'];
     $table  = [];
     foreach (rows($sql) as $r) {
         $line = [];
@@ -80,7 +92,7 @@ function page_reports($bid) {
                . field('ترتيب حسب', '<select name="sort" class="form-control">' . $opt('volume', 'حجم التحويلات', $sort) . $opt('count', 'عدد التحويلات', $sort) . $opt('recurring', 'التحويلات المتكررة', $sort) . '</select>') . '</div>';
     echo '<div class="card"><div class="card-body"><form method="get" class="filter-form">' . $form
        . '<button class="btn btn-primary">🔍 عرض التقرير</button><button type="button" onclick="window.print()" class="btn btn-gold">🖨️ طباعة</button></form></div></div>';
-    echo '<div class="muted small mb">🔒 حفاظاً على سرية بيانات العملاء، تعرض التقارير أرقام الحسابات دون الأسماء أو أرقام الهويات.</div>';
+    if (!in_array($type, ['app', 'banks'])) echo '<div class="muted small mb">🔒 حفاظاً على سرية بيانات العملاء، تعرض التقارير أرقام الحسابات دون الأسماء أو أرقام الهويات.</div>';
 
     table_card($title, '📋', $headers, $table, badge(count($table) . ' سجل'));
     echo '<script>var t=document.getElementById("reportType"),s=document.getElementById("sortBox");if(s)t.onchange=function(){s.style.display=t.value==="transfers"?"block":"none"};</script>';
