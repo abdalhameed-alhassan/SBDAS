@@ -17,8 +17,8 @@ const L_GENDER  = ['male'=>'ذكر','female'=>'أنثى'];
 const NAV = [
     'admin' => [['📊','لوحة التحكم','dashboard'], ['👥','إدارة المستخدمين','users'], ['🏛️','إدارة الفروع','branches']],
     'executive' => [['📊','لوحة الإدارة العليا','dashboard'], ['🏛️','مقارنة الفروع','branches'],
-                    ['💰','التحليل المالي','financial'], ['📋','التقارير','reports']],
-    'branch_manager' => [['📊','لوحة الفرع','dashboard'], ['💰','التحليل المالي','financial'], ['📋','تقارير الفرع','reports']],
+                    ['📋','التحليل المالي والتقارير','reports']],
+    'branch_manager' => [['📊','لوحة الفرع','dashboard'], ['📋','التحليل المالي والتقارير','reports']],
 ];
 
 function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES); }
