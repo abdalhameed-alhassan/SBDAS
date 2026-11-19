@@ -2,7 +2,7 @@
 /**
  * api/index.php — نقطة الدخول الوحيدة (Front Controller) لنشر Vercel عبر vercel-php،
  * وللتشغيل المحلي عبر:   php -S 127.0.0.1:8080 -t public api/index.php
- * يقبل صفحات المشروع المعروفة فقط (الجذر + login/logout + pages/{admin,executive,branch_manager}/*.php)
+ * يقبل صفحات المشروع المعروفة فقط (الجذر + login/logout + pages/{executive,branch_manager}/*.php)
  * ويضمّنها كما هي. أي مسار آخر (includes/، database/، tools/…) يُرفض بـ 404 ولا يُنفَّذ.
  * الملفات الساكنة (CSS/صور) تُخدم مباشرة من public/ ولا تمر من هنا.
  */
@@ -20,7 +20,7 @@ if ($path === '/' || $path === '/index.php') {
     $target = $root . '/index.php';
 } elseif (preg_match('~^/(login|logout)\.php$~', $path, $m)) {
     $target = $root . '/' . $m[1] . '.php';
-} elseif (preg_match('~^/pages/(admin|executive|branch_manager)/([a-z_]+)\.php$~', $path, $m)) {
+} elseif (preg_match('~^/pages/(executive|branch_manager)/([a-z_]+)\.php$~', $path, $m)) {
     $target = $root . '/pages/' . $m[1] . '/' . $m[2] . '.php';
 }
 

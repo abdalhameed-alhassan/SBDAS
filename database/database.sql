@@ -38,7 +38,7 @@ CREATE TABLE users (
     full_name     VARCHAR(100) NOT NULL,
     username      VARCHAR(60)  NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    role          ENUM('admin','branch_employee','branch_manager','executive') NOT NULL,
+    role          ENUM('branch_manager','executive') NOT NULL,
     is_active     TINYINT(1) DEFAULT 1,
     created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (branch_id) REFERENCES branches(branch_id)
@@ -216,7 +216,6 @@ INSERT INTO branches (branch_name,city,state,manager_name,phone,address) VALUES
 
 -- كلمة المرور: قيمة عشوائية غير معروفة (انظر رأس الملف)
 INSERT INTO users (branch_id,full_name,username,password_hash,role) VALUES
-(1,'مدير النظام',              'admin',    '$2y$10$4fYtkNbYqO4HTyZCHERKCuKD4Psj9q6Si56SASH1ytfXD5NkBGQIW','admin'),
 (1,'الإدارة العليا',           'executive','$2y$10$4fYtkNbYqO4HTyZCHERKCuKD4Psj9q6Si56SASH1ytfXD5NkBGQIW','executive'),
 (1,'مدير الفرع الرئيسي',      'manager1', '$2y$10$4fYtkNbYqO4HTyZCHERKCuKD4Psj9q6Si56SASH1ytfXD5NkBGQIW','branch_manager'),
 (2,'مدير فرع أم درمان',       'manager2', '$2y$10$4fYtkNbYqO4HTyZCHERKCuKD4Psj9q6Si56SASH1ytfXD5NkBGQIW','branch_manager'),
@@ -225,9 +224,7 @@ INSERT INTO users (branch_id,full_name,username,password_hash,role) VALUES
 (5,'مدير فرع ود مدني',        'manager5', '$2y$10$4fYtkNbYqO4HTyZCHERKCuKD4Psj9q6Si56SASH1ytfXD5NkBGQIW','branch_manager'),
 (6,'مدير فرع الأبيض',         'manager6', '$2y$10$4fYtkNbYqO4HTyZCHERKCuKD4Psj9q6Si56SASH1ytfXD5NkBGQIW','branch_manager'),
 (7,'مدير فرع كسلا',           'manager7', '$2y$10$4fYtkNbYqO4HTyZCHERKCuKD4Psj9q6Si56SASH1ytfXD5NkBGQIW','branch_manager'),
-(8,'مدير فرع عطبرة',          'manager8', '$2y$10$4fYtkNbYqO4HTyZCHERKCuKD4Psj9q6Si56SASH1ytfXD5NkBGQIW','branch_manager'),
-(1,'موظف الفرع الرئيسي',      'emp1',     '$2y$10$4fYtkNbYqO4HTyZCHERKCuKD4Psj9q6Si56SASH1ytfXD5NkBGQIW','branch_employee'),
-(2,'موظف فرع أم درمان',       'emp2',     '$2y$10$4fYtkNbYqO4HTyZCHERKCuKD4Psj9q6Si56SASH1ytfXD5NkBGQIW','branch_employee');
+(8,'مدير فرع عطبرة',          'manager8', '$2y$10$4fYtkNbYqO4HTyZCHERKCuKD4Psj9q6Si56SASH1ytfXD5NkBGQIW','branch_manager');
 
 -- ============================================================
 -- 80 عميل موزعين على 8 فروع (واقعي لبنك سوداني متوسط)

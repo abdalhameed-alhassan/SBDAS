@@ -1,6 +1,6 @@
 <?php
 require_once '../../includes/init.php';
-require_role('branch_manager', 'branch_employee', 'admin');
+require_role('branch_manager');
 
 $bid = (int)current_user()['branch_id'];
 $b   = branch_summary($bid)[0] ?? [];

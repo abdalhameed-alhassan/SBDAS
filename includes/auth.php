@@ -17,10 +17,8 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // الأدوار: الاسم العربي + مجلد صفحاتها
 const ROLES = [
-    'admin'           => ['مدير النظام',   'admin'],
     'executive'       => ['الإدارة العليا', 'executive'],
     'branch_manager'  => ['مدير الفرع',    'branch_manager'],
-    'branch_employee' => ['موظف الفرع',    'branch_manager'],
 ];
 
 // مسار المشروع من جذر الخادم (يعمل داخل أي مجلد فرعي مثل /sbdas_lite)
@@ -33,7 +31,7 @@ function base_url() {
     return rtrim(str_replace($doc, '', $root), '/');
 }
 
-function is_logged_in() { return isset($_SESSION['user_id']); }
+function is_logged_in() { return isset($_SESSION['user_id'], $_SESSION['role'], ROLES[$_SESSION['role']]); }
 function role_label($role) { return ROLES[$role][0] ?? $role; }
 
 function current_user() {

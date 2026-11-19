@@ -1,12 +1,13 @@
 <?php
 require_once '../../includes/init.php';
-require_role('executive', 'admin');
+require_role('executive');
 
 // ── أرقام البنك ──
 $k = row("SELECT
     (SELECT COUNT(*) FROM customers WHERE is_active=1) AS customers,
     (SELECT COUNT(*) FROM accounts) AS accounts,
     (SELECT COUNT(*) FROM loans) AS loans,
+    (SELECT COUNT(*) FROM loans WHERE status='active') AS active_loans,
     (SELECT COUNT(*) FROM loans WHERE status='defaulted') AS defaulted,
     (SELECT COUNT(*) FROM complaints) AS complaints,
     (SELECT COUNT(*) FROM complaints WHERE status IN ('open','in_progress')) AS open_complaints,
@@ -26,10 +27,13 @@ $app = row("SELECT
 // ── مؤشرات الأداء ──
 [$growthLabels, $growth] = monthly('COUNT(*)', 'customers', 'is_active=1');
 [$depLabels, $dep]       = monthly('SUM(amount)', 'transactions', "txn_type='deposit' AND status='completed'");
-$defaultRate   = $k['loans'] ? round($k['defaulted'] / $k['loans'] * 100, 1) : 0;
+// نسبة التعثر = القروض المتعثرة ÷ (النشطة + المتعثرة) — المسدَّدة لا تدخل في المقام
+$live = (int)$k['active_loans'] + (int)$k['defaulted'];
+$defaultRate   = $live ? round($k['defaulted'] / $live * 100, 1) : 0;
 $complaintRate = $k['complaints'] ? round($k['open_complaints'] / $k['complaints'] * 100, 1) : 0;
-$last = end($growth); $prev = prev($growth) ?: 1;
-$growthRate = round(($last - $prev) / max($prev, 1) * 100, 1);
+// نمو العملاء = تسجيلات الشهر الأخير مقابل ما قبله؛ غير محدد إن لم يوجد شهر سابق أو كان صفراً
+$last = end($growth); $prev = prev($growth);
+$growthRate = ($prev) ? round(($last - $prev) / $prev * 100, 1) : null;
 
 open_layout('لوحة الإدارة العليا', 'dashboard');
 ?>
@@ -51,10 +55,12 @@ open_layout('لوحة الإدارة العليا', 'dashboard');
 
 <?php section_title('📈 مؤشرات الأداء الرئيسية');
 kpi_grid([
-    ['📉', $defaultRate . '%', 'نسبة تعثر القروض', 'danger', $defaultRate > 15 ? '▲ مرتفعة' : '✔ ضمن الحد المقبول'],
+    ['📉', $defaultRate . '%', 'نسبة تعثر القروض', $defaultRate > 20 ? 'danger' : ($defaultRate > 10 ? 'warn' : 'success'),
+        $defaultRate > 20 ? '▲ مرتفعة' : ($defaultRate > 10 ? '● تحت المراقبة' : '✔ ضمن الحد المقبول')],
     ['📣', $complaintRate . '%', 'نسبة الشكاوى المفتوحة', 'warn'],
-    ['⏱️', round($k['avg_days'], 1), 'متوسط أيام معالجة الشكوى', 'teal'],
-    ['📈', ($growthRate >= 0 ? '+' : '') . $growthRate . '%', 'معدل نمو العملاء', $growthRate >= 0 ? 'success' : 'danger'],
+    ['⏱️', $k['avg_days'] === null ? 'غير محدد' : round($k['avg_days'], 1), 'متوسط أيام معالجة الشكوى', 'teal'],
+    ['📈', $growthRate === null ? 'غير محدد' : (($growthRate >= 0 ? '+' : '') . $growthRate . '%'), 'معدل نمو العملاء',
+        $growthRate === null ? 'teal' : ($growthRate >= 0 ? 'success' : 'danger')],
 ]);
 section_title('🏦 الأرقام الأساسية');
 kpi_grid([

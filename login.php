@@ -13,7 +13,7 @@ $demoAccounts = ['executive' => 'executive', 'branch_manager' => 'manager1'];
 $isDemo = $demoEnabled && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['demo'], $demoAccounts[$_POST['demo']]);
 
 if ($isDemo) {
-    $u = run("SELECT user_id, full_name, role, branch_id FROM users WHERE username=? AND is_active=1", [$demoAccounts[$_POST['demo']]])
+    $u = run("SELECT user_id, full_name, role, branch_id FROM users WHERE username=? AND is_active=1 AND role IN ('executive','branch_manager')", [$demoAccounts[$_POST['demo']]])
          ->get_result()->fetch_assoc();
     if ($u) {
         session_regenerate_id(true);
@@ -25,7 +25,7 @@ if ($isDemo) {
     }
     $error = 'الحساب التجريبي غير متاح حالياً.';
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $u = run("SELECT user_id, full_name, role, branch_id, password_hash FROM users WHERE username=? AND is_active=1", [$_POST['username']])
+    $u = run("SELECT user_id, full_name, role, branch_id, password_hash FROM users WHERE username=? AND is_active=1 AND role IN ('executive','branch_manager')", [$_POST['username']])
          ->get_result()->fetch_assoc();
 
     if ($u && password_verify($_POST['password'], $u['password_hash'])) {
@@ -73,7 +73,7 @@ if ($isDemo) {
       <button type="submit" class="btn btn-primary">دخول إلى النظام</button>
     </form>
     <?php if ($demoEnabled): ?></details><?php else: ?>
-    <div class="login-hint">حسابات تجريبية (كلمة المرور password): admin — executive — manager1</div>
+    <div class="login-hint">حسابات تجريبية (كلمة المرور password): executive — manager1</div>
     <?php endif; ?>
   </div>
 </div>

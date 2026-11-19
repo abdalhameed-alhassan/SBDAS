@@ -1,6 +1,6 @@
 <?php
 require_once '../../includes/init.php';
-require_role('executive', 'admin');
+require_role('executive');
 
 $branches = branch_summary();
 
@@ -31,7 +31,6 @@ $rows = [];
 foreach ($branches as $b) {
     $loans = $b['active_loans'] + $b['defaulted_loans'];
     $rate  = $loans ? round($b['defaulted_loans'] / $loans * 100, 1) : 0;
-    $score = max(0, min(100, 100 - $rate * 3 - $b['open_complaints'] * 4));
     $adopt = $b['customers'] ? round($b['app_users'] / $b['customers'] * 100) : 0;
     $rows[] = [
         '<strong>' . h($b['branch_name']) . '</strong><br><small class="muted">' . h($b['city']) . '</small>',
@@ -41,11 +40,10 @@ foreach ($branches as $b) {
         badge($rate . '%', $rate > 20 ? 'danger' : ($rate > 10 ? 'warn' : 'success')),
         badge($b['open_complaints'], $b['open_complaints'] ? 'warn' : 'success'),
         number_format($b['app_users']), badge($adopt . '%', $adopt >= 70 ? 'success' : ($adopt >= 50 ? 'teal' : ($adopt >= 30 ? 'warn' : 'danger'))),
-        badge($score . '%', $score >= 70 ? 'success' : ($score >= 45 ? 'warn' : 'danger')),
     ];
 }
 table_card('مقارنة الفروع', '🏛️',
-    ['الفرع','العملاء','الحسابات','المعاملات','الإيداعات','السحوبات','التحويلات','قروض نشطة','متعثرة','نسبة التعثر','شكاوى','مستخدمو التطبيق','التبني الرقمي','التقييم'], $rows);
+    ['الفرع','العملاء','الحسابات','المعاملات','الإيداعات','السحوبات','التحويلات','قروض نشطة','متعثرة','نسبة التعثر','شكاوى','مستخدمو التطبيق','التبني الرقمي'], $rows);
 
 breakdown_card('تفصيل السحوبات حسب النوع', '💸', $branches, $by, ['withdrawal'], ['cash'=>'نقدي','cheque'=>'شيك','app_transfer'=>'تطبيق','atm'=>'صرف آلي','pos'=>'نقطة بيع']);
 breakdown_card('تفصيل الإيداعات حسب النوع', '💵', $branches, $by, ['deposit'], ['cash'=>'نقدي','cheque'=>'شيك','app_transfer'=>'تطبيق','bban'=>'BBAN']);

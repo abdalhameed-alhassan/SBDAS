@@ -44,6 +44,14 @@ $views = ['vw_branch_summary','vw_branch_withdrawal_breakdown','vw_branch_deposi
 foreach ($views as $v) { $db->query("DROP VIEW IF EXISTS `$v`"); $steps++; }
 $db->query("DROP TABLE IF EXISTS notifications"); $steps++;
 
+// دور مدير النظام وموظف الفرع أُلغيا: يبقى دوران فقط (الإدارة العليا ومدير الفرع)
+$col = $db->query("SHOW COLUMNS FROM users LIKE 'role'")->fetch_assoc();
+if ($col && (strpos($col['Type'], 'admin') !== false || strpos($col['Type'], 'branch_employee') !== false)) {
+    $db->query("DELETE FROM users WHERE role IN ('admin','branch_employee')");
+    $db->query("ALTER TABLE users MODIFY role ENUM('branch_manager','executive') NOT NULL");
+    $steps += 2; echo "Roles reduced to executive + branch_manager.\n";
+} else { echo "Roles: already reduced.\n"; }
+
 $t = $db->query("SHOW FULL TABLES"); $tables = []; $nv = 0;
 while ($r = $t->fetch_row()) { if ($r[1] === 'VIEW') $nv++; else $tables[] = $r[0]; }
 echo "Done ($steps steps). Tables: " . count($tables) . " (" . implode(', ', $tables) . "), Views: $nv\n";

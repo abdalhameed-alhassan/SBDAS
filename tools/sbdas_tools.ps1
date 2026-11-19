@@ -1,5 +1,5 @@
 # SBDAS helper - run on YOUR PC (Windows PowerShell). The database password is typed here (hidden) and never saved or printed.
-# Menu: 1) import the SBDAS database  2) set a password for one user (e.g. admin)  3) migrate an existing database to the SBDAS Lite structure (optional cleanup)
+# Menu: 1) import the SBDAS database  2) set a password for one user (e.g. executive)  3) migrate an existing database to the SBDAS Lite structure (optional cleanup)
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
 function Read-Secret($label) {
@@ -35,13 +35,13 @@ $env:DB_PASS = Read-Secret "Database password for $dbUser (hidden)"
 try {
     Write-Host "`nWhat do you want to do?"
     Write-Host "  1) Import the SBDAS database (first time only; creates the database if missing, refuses if it already has data)"
-    Write-Host "  2) Set a password for one SBDAS user (e.g. admin)"
+    Write-Host "  2) Set a password for one SBDAS user (e.g. executive)"
     Write-Host "  3) Migrate the existing database to the Lite structure (optional; drops the 14 views + notifications table; data is untouched)"
     $c = (Read-Host 'Choose 1-3').Trim()
     switch ($c) {
         '1' { & $php "$here\import_database.php" $sql | Out-Host }
         '2' {
-            $env:RESET_USERNAME = (Read-Host 'Username (e.g. admin)').Trim()
+            $env:RESET_USERNAME = (Read-Host 'Username (e.g. executive)').Trim()
             $env:RESET_PASSWORD = Read-Secret 'NEW password (min 8 chars, hidden)'
             & $php "$here\reset_password.php" | Out-Host
         }
