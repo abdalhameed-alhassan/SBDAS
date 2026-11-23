@@ -1,5 +1,5 @@
 <?php
-// صفحة «التحليل المالي والتقارير» — صفحة واحدة للإدارة العليا (كل الفروع أو فرع يختاره) ولمدير الفرع (فرعه فقط):
+// صفحة «التحليل المصرفي والتشغيلي والتقارير» — صفحة واحدة للإدارة العليا (كل الفروع أو فرع يختاره) ولمدير الفرع (فرعه فقط):
 // أعلاها مؤشرات الشهر الحالي، وتحتها التقارير (للأشهر السابقة والفترات المحددة).
 // حفاظاً على سرية العملاء تُعرض أرقام الحسابات دون الأسماء أو أرقام الهويات.
 function page_reports($bid) {
@@ -16,7 +16,7 @@ function page_reports($bid) {
 
     // نوع التقرير => [العنوان، العناوين، الاستعلام]
     $reports = [
-        // ── التقارير المالية (كانت صفحة التحليل المالي) ──
+        // ── التقارير المصرفية (كانت صفحة التحليل المصرفي والتشغيلي) ──
         'period' => ['الإيرادات والسحوبات حسب الفترة', ['الفترة','الإيراد: إيداعات (SDG)','عدد الإيداعات','الصادر: سحوبات (SDG)','عدد السحوبات','الصافي (SDG)'],
             "SELECT $grp AS p, SUM(CASE WHEN t.txn_type='deposit' THEN t.amount ELSE 0 END) AS v_in, SUM(t.txn_type='deposit') AS n_in,
                     SUM(CASE WHEN t.txn_type='withdrawal' THEN t.amount ELSE 0 END) AS v_out, SUM(t.txn_type='withdrawal') AS n_out,
@@ -115,7 +115,7 @@ function page_reports($bid) {
     $net = $cv('dep') - $cv('wd');
 
     $scope = $bid ? ' — ' . (row("SELECT branch_name FROM branches WHERE branch_id=" . (int)$bid)['branch_name'] ?? '') : '';
-    open_layout('التحليل المالي والتقارير' . $scope, 'reports');
+    open_layout('التحليل المصرفي والتشغيلي والتقارير' . $scope, 'reports');
 
     echo '<div class="muted small mb">📅 مؤشرات الشهر الحالي (' . $curM . ' — آخر شهر فيه بيانات). للأشهر السابقة أو أي فترة أخرى استعملي التقارير أدناه.</div>';
     kpi_grid([['💵', fmt($cv('dep')), 'إيداعات الشهر (SDG)', 'success', number_format($cv('dep_n')) . ' عملية' . $chg('dep')],

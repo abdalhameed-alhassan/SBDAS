@@ -16,8 +16,8 @@ const L_GENDER  = ['male'=>'ذكر','female'=>'أنثى'];
 // قائمة كل دور: [أيقونة، نص، صفحة]
 const NAV = [
     'executive' => [['📊','لوحة الإدارة العليا','dashboard'], ['🏛️','مقارنة الفروع','branches'],
-                    ['📋','التحليل المالي والتقارير','reports']],
-    'branch_manager' => [['📊','لوحة الفرع','dashboard'], ['📋','التحليل المالي والتقارير','reports']],
+                    ['📋','التحليل المصرفي والتشغيلي والتقارير','reports']],
+    'branch_manager' => [['📊','لوحة الفرع','dashboard'], ['📋','التحليل المصرفي والتشغيلي والتقارير','reports']],
 ];
 
 function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES); }
