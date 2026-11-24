@@ -11,7 +11,7 @@ function Stop-Here($msg) { Write-Host $msg -ForegroundColor Red; Read-Host 'Pres
 
 $proj = Split-Path -Parent $here
 $sql = Join-Path $proj 'database\database.sql'
-foreach ($p in @($sql, "$here\import_database.php", "$here\reset_password.php", "$here\migrate_to_lite.php")) { if (-not (Test-Path $p)) { Stop-Here "Missing file: $p" } }
+foreach ($p in @($sql, "$here\cli_db.php", "$here\import_database.php", "$here\reset_password.php", "$here\migrate_to_lite.php")) { if (-not (Test-Path $p)) { Stop-Here "Missing file: $p" } }
 
 $php = $null
 $cmd = Get-Command php -ErrorAction SilentlyContinue

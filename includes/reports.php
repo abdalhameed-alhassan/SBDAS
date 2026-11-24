@@ -1,22 +1,23 @@
 <?php
-// صفحة «التحليل المصرفي والتشغيلي والتقارير» — صفحة واحدة للإدارة العليا (كل الفروع أو فرع يختاره) ولمدير الفرع (فرعه فقط):
-// أعلاها مؤشرات الشهر الحالي، وتحتها التقارير (للأشهر السابقة والفترات المحددة).
-// حفاظاً على سرية العملاء تُعرض أرقام الحسابات دون الأسماء أو أرقام الهويات.
+// "Banking and operational analysis and reports" page, shared by both roles:
+// the executive sees all branches (or one chosen branch), a branch manager sees only their own branch.
+// The top of the page shows the current-month indicators and the reports (any period) are listed below them.
+// For customer privacy the reports show account numbers only, never names or national IDs.
 function page_reports($bid) {
     $from   = valid_date($_GET['from'] ?? null, date('Y-01-01'));
     $to     = valid_date($_GET['to']   ?? null, date('Y-m-d'));
-    $branch = $bid ?: ($_GET['branch'] ?? 'all');             // مدير الفرع مقيَّد بفرعه
-    $b      = $branch === 'all' ? '' : (int)$branch;           // رقم الفرع المطلوب أو فارغ للكل
-    $acc    = fn($alias) => "(SELECT MIN(account_id) FROM accounts WHERE customer_id=$alias.customer_id)";  // رقم حساب العميل
+    $branch = $bid ?: ($_GET['branch'] ?? 'all');             // a branch manager is locked to their own branch
+    $b      = $branch === 'all' ? '' : (int)$branch;           // requested branch id, or empty for all branches
+    $acc    = fn($alias) => "(SELECT MIN(account_id) FROM accounts WHERE customer_id=$alias.customer_id)";  // the customer's account number
     $sort   = in_array($_GET['sort'] ?? '', ['volume','count','recurring']) ? $_GET['sort'] : 'volume';
-    $by      = in_array($_GET['by'] ?? '', ['day','week','month']) ? $_GET['by'] : 'month';   // تجميع تقرير الفترات
+    $by      = in_array($_GET['by'] ?? '', ['day','week','month']) ? $_GET['by'] : 'month';   // grouping of the period report
     $grp     = ['day' => 'DATE(t.created_at)', 'week' => "DATE_FORMAT(t.created_at,'أسبوع %v من %x')", 'month' => "DATE_FORMAT(t.created_at,'%Y-%m')"][$by];
     $between = fn($col) => "DATE($col) BETWEEN '$from' AND '$to'";
     $in      = fn($alias) => $b ? "AND $alias.branch_id=$b" : '';
 
-    // نوع التقرير => [العنوان، العناوين، الاستعلام]
+    // Report type => [title, column headers, query]
     $reports = [
-        // ── التقارير المصرفية (كانت صفحة التحليل المصرفي والتشغيلي) ──
+        // ── Banking reports ──
         'period' => ['الإيرادات والسحوبات حسب الفترة', ['الفترة','الإيراد: إيداعات (SDG)','عدد الإيداعات','الصادر: سحوبات (SDG)','عدد السحوبات','الصافي (SDG)'],
             "SELECT $grp AS p, SUM(CASE WHEN t.txn_type='deposit' THEN t.amount ELSE 0 END) AS v_in, SUM(t.txn_type='deposit') AS n_in,
                     SUM(CASE WHEN t.txn_type='withdrawal' THEN t.amount ELSE 0 END) AS v_out, SUM(t.txn_type='withdrawal') AS n_out,
@@ -51,7 +52,7 @@ function page_reports($bid) {
             "SELECT {$acc('k')} AS account_id, br.branch_name, k.subject, k.status, k.opened_at, k.resolved_at
              FROM complaints k JOIN branches br ON br.branch_id=k.branch_id
              WHERE {$between('k.opened_at')} {$in('k')} ORDER BY k.opened_at DESC LIMIT 300"],
-        // التحويلات الداخلية لكل حساب (كمرسِل أو مستلِم) + التحويلات المتكررة بين الطرفين نفسيهما
+        // Internal transfers per account (as sender or receiver), plus repeated transfers between the same two accounts
         'transfers' => ['التحويلات (حسب الحساب)', ['رقم الحساب','الفرع','عدد التحويلات','حجمها (SDG)','تحويلات متكررة'],
             "SELECT a.account_id, br.branch_name, v.cnt, v.vol, COALESCE(r.rec,0) AS rec
              FROM accounts a JOIN branches br ON br.branch_id=a.branch_id
@@ -64,7 +65,7 @@ function page_reports($bid) {
                             WHERE status='completed' AND {$between('created_at')} GROUP BY from_account_id, to_account_id HAVING n>1) p
                         GROUP BY from_account_id) r ON r.account_id=a.account_id
              WHERE 1=1 {$in('a')} ORDER BY " . ['volume' => 'v.vol', 'count' => 'v.cnt', 'recurring' => 'rec'][$sort] . " DESC LIMIT 200"],
-        // ── التقارير الرقمية (بديل صفحة التحليل الرقمي): تفصيل شهري/حسب البنك فقط؛ الإجماليات في الشريط الرقمي بلوحة الإدارة ──
+        // ── Digital reports: monthly / per-bank detail only; the totals are in the digital strip on the executive dashboard ──
         'app' => ['نشاط تطبيق الجوال (شهرياً)', ['الشهر','مستخدمون نشطون','عمليات دخول','عمليات مالية','قيمتها (SDG)'],
             "SELECT DATE_FORMAT(s.created_at,'%Y-%m') AS m, COUNT(DISTINCT s.app_user_id) AS users,
                     SUM(s.action_type='login') AS logins, SUM(s.action_type IN ('transfer','payment','deposit_request')) AS ops,
@@ -77,10 +78,10 @@ function page_reports($bid) {
              FROM external_transfers e WHERE e.status='completed' AND {$between('e.created_at')} {$in('e')}
              GROUP BY e.external_bank ORDER BY SUM(e.amount) DESC"],
     ];
-    $type = isset($reports[$_GET['type'] ?? '']) ? $_GET['type'] : 'period';
+    $type = is_string($_GET['type'] ?? null) && isset($reports[$_GET['type']]) ? $_GET['type'] : 'period';
     [$title, $headers, $sql] = $reports[$type];
 
-    // تحويل القيم إلى نص عربي/أرقام منسّقة بحسب اسم العمود
+    // Format each value by its column name: Arabic labels for coded columns, thousands separators for numeric ones
     $labels = ['txn_type' => L_TXN, 'sub_type' => L_SUB, 'status' => L_STATUS, 'account_type' => L_ACCOUNT, 'gender' => L_GENDER];
     $money  = ['amount', 'balance', 'paid_amount', 'remaining', 'vol', 'cnt', 'rec', 'users', 'logins', 'ops', 'amt', 'n_in', 'v_in', 'n_out', 'v_out', 'net', 'n_tr'];
     $table  = [];
@@ -92,12 +93,12 @@ function page_reports($bid) {
         $table[] = $line;
     }
 
-    if ($type === 'period' && $data) {     // سطر إجمالي الفترة المحددة
+    if ($type === 'period' && $data) {     // total row for the selected period
         $sm = fn($k) => number_format(array_sum(array_map('floatval', array_column($data, $k))));
         array_unshift($table, ['<b>إجمالي الفترة</b>', '<b>' . $sm('v_in') . '</b>', '<b>' . $sm('n_in') . '</b>', '<b>' . $sm('v_out') . '</b>', '<b>' . $sm('n_out') . '</b>', '<b>' . $sm('net') . '</b>']);
     }
 
-    // ── مؤشرات الشهر الحالي (آخر شهر فيه بيانات، لأن البيانات تجريبية) مقارنةً بالشهر السابق ──
+    // ── Current-month indicators (the latest month that has data, because the data is sample data), compared with the previous month ──
     $sc  = $b ? "AND branch_id=$b" : '';
     $ref = row("SELECT MAX(created_at) AS d FROM transactions WHERE status='completed' $sc")['d'] ?? date('Y-m-d H:i:s');
     $mo  = [];
@@ -123,7 +124,7 @@ function page_reports($bid) {
               ['🔄', fmt($cv('tr')),  'تحويلات الشهر (SDG)', 'teal',    number_format($cv('tr_n')) . ' عملية' . $chg('tr')],
               ['🏧', fmt($net), 'صافي الحركة (إيداعات − سحوبات)', $net >= 0 ? 'gold' : 'danger']]);
 
-    // نموذج الفلترة
+    // Filter form
     $opt = fn($k, $v, $cur) => '<option value="' . $k . '"' . ($k == $cur ? ' selected' : '') . '>' . h($v) . '</option>';
     $typeOpts = ''; foreach ($reports as $k => $rp) if ($bid ? $k !== 'transfers' : true) $typeOpts .= $opt($k, $rp[0], $type);
     $form = field('نوع التقرير', '<select name="type" class="form-control" id="reportType">' . $typeOpts . '</select>');

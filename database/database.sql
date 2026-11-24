@@ -1,12 +1,12 @@
 -- ============================================================
--- SBDAS Lite — ملف قاعدة البيانات لنسخة النشر (Aiven MySQL / أي MySQL 8)
+-- SBDAS Lite — database file for the deployment build (Aiven MySQL / any MySQL 8)
 -- ============================================================
--- يُستورد على قاعدة فارغة موجودة مسبقاً (اسمها في DB_NAME، مثلاً sbdas).
--- لا يحتوي DROP DATABASE ولا CREATE DATABASE ولا USE، ولا يمسّ قواعد أخرى.
--- 11 جدولاً للنظام بلا Views وبلا جدول إشعارات. كلمات مرور المستخدمين مشفّرة بقيمة عشوائية
--- غير معروفة لأحد: الدخول عبر زرّي الدخول التجريبي (DEMO_LOGIN=1)، ولتفعيل حساب بكلمة مرور
--- استعمل tools/reset_password.php (الخيار 2 في tools/sbdas_tools.ps1).
--- يضيف جدول sessions فقط لأن Vercel بلا ملفات دائمة (تخزين الجلسات؛ ليس من كيانات النظام).
+-- Import it into an existing empty database (its name is DB_NAME, for example sbdas).
+-- It contains no DROP DATABASE, CREATE DATABASE or USE, and never touches other databases.
+-- 11 system tables, with no views and no notifications table. The users' passwords are hashed from a random
+-- value that nobody knows: sign in with the two demo-login buttons (DEMO_LOGIN=1), or, to activate an account
+-- with a password, use tools/reset_password.php (option 2 in tools/sbdas_tools.ps1).
+-- It adds only the sessions table, because Vercel has no persistent files (session storage; not one of the system entities).
 -- ============================================================
 
 SET NAMES utf8mb4;
@@ -15,10 +15,10 @@ SET FOREIGN_KEY_CHECKS = 0;
 
 
 -- ============================================================
--- 1) الجداول
+-- 1) Tables
 -- ============================================================
 
--- ── الجداول الأساسية: الفروع والمستخدمون والعملاء والحسابات ──
+-- ── Core tables: branches, users, customers and accounts ──
 
 CREATE TABLE branches (
     branch_id    INT AUTO_INCREMENT PRIMARY KEY,
@@ -71,8 +71,8 @@ CREATE TABLE accounts (
     FOREIGN KEY (branch_id)   REFERENCES branches(branch_id)
 ) ENGINE=InnoDB;
 
--- ── الحركات المالية والتحويلات ──
--- channel: من أين جاءت العملية | sub_type: نوع مفصّل (cash/cheque/app_transfer/...)
+-- ── Transactions and transfers ──
+-- channel: where the operation came from | sub_type: detailed type (cash/cheque/app_transfer/...)
 CREATE TABLE transactions (
     txn_id       INT AUTO_INCREMENT PRIMARY KEY,
     account_id   INT NOT NULL,
@@ -106,14 +106,14 @@ CREATE TABLE internal_transfers (
     FOREIGN KEY (to_branch_id)    REFERENCES branches(branch_id)
 ) ENGINE=InnoDB;
 
--- external_transfers: التحويلات مع البنوك الأخرى (BBAN)
+-- external_transfers: transfers with other banks (BBAN)
 CREATE TABLE external_transfers (
     ext_id        INT AUTO_INCREMENT PRIMARY KEY,
     account_id    INT NOT NULL,
     branch_id     INT NOT NULL,
     direction     ENUM('inbound','outbound') NOT NULL,
     external_bank VARCHAR(100) NOT NULL,
-    bban          VARCHAR(30)  DEFAULT NULL,  -- رقم الحساب البنكي الأساسي السوداني
+    bban          VARCHAR(30)  DEFAULT NULL,  -- Sudanese Basic Bank Account Number
     amount        DECIMAL(15,2) NOT NULL,
     currency      VARCHAR(10) DEFAULT 'SDG',
     channel       ENUM('branch','app','bban') NOT NULL DEFAULT 'bban',
@@ -123,7 +123,7 @@ CREATE TABLE external_transfers (
     FOREIGN KEY (branch_id)  REFERENCES branches(branch_id)
 ) ENGINE=InnoDB;
 
--- ── القروض والشكاوى والتنبيهات ──
+-- ── Loans and complaints ──
 CREATE TABLE loans (
     loan_id     INT AUTO_INCREMENT PRIMARY KEY,
     customer_id INT NOT NULL,
@@ -149,7 +149,7 @@ CREATE TABLE complaints (
     FOREIGN KEY (branch_id)   REFERENCES branches(branch_id)
 ) ENGINE=InnoDB;
 
--- ── القنوات الرقمية: مستخدمو التطبيق وجلساته ──
+-- ── Digital channels: app users and their sessions ──
 CREATE TABLE app_users (
     app_user_id   INT AUTO_INCREMENT PRIMARY KEY,
     customer_id   INT NOT NULL,
@@ -171,7 +171,7 @@ CREATE TABLE app_sessions (
     FOREIGN KEY (branch_id)   REFERENCES branches(branch_id)
 ) ENGINE=InnoDB;
 
--- ── جدول الجلسات (لنسخة النشر) ──
+-- ── Sessions table (deployment build) ──
 CREATE TABLE IF NOT EXISTS sessions (
     id          VARCHAR(128) NOT NULL PRIMARY KEY,
     data        MEDIUMTEXT   NOT NULL,
@@ -184,7 +184,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- ============================================================
--- 2) الفهارس (لتسريع الفلترة بالتاريخ والفرع في صفحات التقارير)
+-- 2) Indexes (speed up filtering by date and branch in the report pages)
 -- ============================================================
 ALTER TABLE transactions
     ADD INDEX idx_txn_branch_date  (branch_id, created_at),
@@ -198,10 +198,10 @@ ALTER TABLE internal_transfers ADD INDEX idx_itransfer_date        (created_at);
 ALTER TABLE external_transfers ADD INDEX idx_extransfer_date       (created_at);
 
 -- ============================================================
--- 3) البيانات التجريبية
--- بنك متوسط الحجم: 8 فروع، 80 عميلاً، مبالغ بالجنيه السوداني
--- (سعر الدولار المفترض 5500 جنيه). بيانات منطقية ومترابطة لأغراض
--- الاختبار والمحاكاة وليست بيانات بنك حقيقي.
+-- 3) Sample data
+-- A mid-sized bank: 8 branches, 80 customers, amounts in Sudanese pounds
+-- (assumed exchange rate: 5,500 pounds per US dollar). The data is consistent and interrelated,
+-- meant for testing and simulation only; it is not real bank data.
 -- ============================================================
 
 INSERT INTO branches (branch_name,city,state,manager_name,phone,address) VALUES
@@ -214,7 +214,7 @@ INSERT INTO branches (branch_name,city,state,manager_name,phone,address) VALUES
 ('فرع كسلا',           'كسلا',          'كسلا',        'الأستاذة هدى أحمد',         '0978901234','شارع الخريجين'),
 ('فرع عطبرة',          'عطبرة',         'نهر النيل',   'الأستاذ الصادق علي',        '0989012345','شارع المحطة');
 
--- كلمة المرور: قيمة عشوائية غير معروفة (انظر رأس الملف)
+-- Password: a random value that nobody knows (see the file header)
 INSERT INTO users (branch_id,full_name,username,password_hash,role) VALUES
 (1,'الإدارة العليا',           'executive','$2y$10$4fYtkNbYqO4HTyZCHERKCuKD4Psj9q6Si56SASH1ytfXD5NkBGQIW','executive'),
 (1,'مدير الفرع الرئيسي',      'manager1', '$2y$10$4fYtkNbYqO4HTyZCHERKCuKD4Psj9q6Si56SASH1ytfXD5NkBGQIW','branch_manager'),
@@ -227,11 +227,11 @@ INSERT INTO users (branch_id,full_name,username,password_hash,role) VALUES
 (8,'مدير فرع عطبرة',          'manager8', '$2y$10$4fYtkNbYqO4HTyZCHERKCuKD4Psj9q6Si56SASH1ytfXD5NkBGQIW','branch_manager');
 
 -- ============================================================
--- 80 عميل موزعين على 8 فروع (واقعي لبنك سوداني متوسط)
--- الفرع الرئيسي وأم درمان الأكبر
+-- 80 customers spread over 8 branches (realistic for a mid-sized Sudanese bank)
+-- The main branch and Omdurman are the largest
 -- ============================================================
 INSERT INTO customers (branch_id,full_name,national_id,phone,gender,created_at) VALUES
--- فرع 1: الفرع الرئيسي (20 عميل)
+-- Branch 1: Main Branch (20 customers)
 (1,'محمد أحمد إبراهيم النور',   '11100001','0911000001','male',  '2023-01-15 09:00:00'),
 (1,'فاطمة عبدالله محمد',        '11100002','0911000002','female','2023-02-10 10:00:00'),
 (1,'عمر خالد حسن',              '11100003','0911000003','male',  '2023-03-05 09:00:00'),
@@ -252,7 +252,7 @@ INSERT INTO customers (branch_id,full_name,national_id,phone,gender,created_at) 
 (1,'أسماء إبراهيم يوسف',        '11100018','0911000018','female','2024-06-15 10:00:00'),
 (1,'محمود خالد الصادق',         '11100019','0911000019','male',  '2024-09-10 09:00:00'),
 (1,'حنان عمر عبدالله',          '11100020','0911000020','female','2025-01-20 10:00:00'),
--- فرع 2: أم درمان (18 عميل)
+-- Branch 2: Omdurman (18 customers)
 (2,'عبدالله حسين محمد',         '11200001','0922000001','male',  '2023-02-01 09:00:00'),
 (2,'مريم عثمان أحمد',           '11200002','0922000002','female','2023-03-15 10:00:00'),
 (2,'خالد يوسف النور',           '11200003','0922000003','male',  '2023-04-10 09:00:00'),
@@ -271,7 +271,7 @@ INSERT INTO customers (branch_id,full_name,national_id,phone,gender,created_at) 
 (2,'وفاء إبراهيم حسين',         '11200016','0922000016','female','2025-01-08 10:00:00'),
 (2,'الهادي محمد أحمد',          '11200017','0922000017','male',  '2025-03-15 09:00:00'),
 (2,'دينا عبدالله علي',          '11200018','0922000018','female','2025-05-20 10:00:00'),
--- فرع 3: الخرطوم بحري (12 عميل)
+-- Branch 3: Khartoum North (12 customers)
 (3,'إبراهيم موسى حسن',          '11300001','0933000001','male',  '2023-03-10 09:00:00'),
 (3,'رقية حسن أحمد',             '11300002','0933000002','female','2023-05-22 10:00:00'),
 (3,'نور الهدى عمر',             '11300003','0933000003','female','2023-08-14 09:00:00'),
@@ -284,7 +284,7 @@ INSERT INTO customers (branch_id,full_name,national_id,phone,gender,created_at) 
 (3,'نجوى إبراهيم محمد',         '11300010','0933000010','female','2025-01-15 10:00:00'),
 (3,'ياسر خالد النور',           '11300011','0933000011','male',  '2025-03-20 09:00:00'),
 (3,'لمياء عبدالله أحمد',        '11300012','0933000012','female','2025-05-05 10:00:00'),
--- فرع 4: بورتسودان (10 عملاء)
+-- Branch 4: Port Sudan (10 customers)
 (4,'محمود عبدالله يوسف',        '11400001','0944000001','male',  '2023-04-05 09:00:00'),
 (4,'نجاة يوسف محمد',            '11400002','0944000002','female','2023-07-18 10:00:00'),
 (4,'الصادق حسين أحمد',          '11400003','0944000003','male',  '2023-10-22 09:00:00'),
@@ -295,7 +295,7 @@ INSERT INTO customers (branch_id,full_name,national_id,phone,gender,created_at) 
 (4,'أمل يوسف إبراهيم',          '11400008','0944000008','female','2025-02-18 10:00:00'),
 (4,'الحسن محمد أحمد',           '11400009','0944000009','male',  '2025-04-10 09:00:00'),
 (4,'مها عبدالله محمد',          '11400010','0944000010','female','2025-06-01 10:00:00'),
--- فرع 5: ود مدني (8 عملاء)
+-- Branch 5: Wad Madani (8 customers)
 (5,'بشرى عمر الطيب',            '11500001','0955000001','female','2023-05-12 09:00:00'),
 (5,'التجاني علي أحمد',          '11500002','0955000002','male',  '2023-09-05 10:00:00'),
 (5,'هدى أحمد إبراهيم',          '11500003','0955000003','female','2024-01-18 09:00:00'),
@@ -304,30 +304,30 @@ INSERT INTO customers (branch_id,full_name,national_id,phone,gender,created_at) 
 (5,'أنور خالد يوسف',            '11500006','0955000006','male',  '2024-10-15 10:00:00'),
 (5,'إيمان الطيب عمر',           '11500007','0955000007','female','2025-02-05 09:00:00'),
 (5,'سامي إبراهيم أحمد',         '11500008','0955000008','male',  '2025-05-18 10:00:00'),
--- فرع 6: الأبيض (6 عملاء)
+-- Branch 6: El Obeid (6 customers)
 (6,'عوض الله محمد أحمد',        '11600001','0966000001','male',  '2023-06-08 09:00:00'),
 (6,'منى خالد عبدالله',          '11600002','0966000002','female','2023-10-20 10:00:00'),
 (6,'حمزة يوسف النور',           '11600003','0966000003','male',  '2024-03-15 09:00:00'),
 (6,'سلوى أحمد إبراهيم',         '11600004','0966000004','female','2024-08-10 10:00:00'),
 (6,'مجدي عبدالله حسن',          '11600005','0966000005','male',  '2025-01-22 09:00:00'),
 (6,'نوال محمد علي',             '11600006','0966000006','female','2025-05-08 10:00:00'),
--- فرع 7: كسلا (4 عملاء)
+-- Branch 7: Kassala (4 customers)
 (7,'حسين أحمد محمد',            '11700001','0977000001','male',  '2023-08-15 09:00:00'),
 (7,'عزة إبراهيم يوسف',          '11700002','0977000002','female','2024-02-22 10:00:00'),
 (7,'أسامة خالد عمر',            '11700003','0977000003','male',  '2024-09-10 09:00:00'),
 (7,'نهى عبدالله أحمد',          '11700004','0977000004','female','2025-03-18 10:00:00'),
--- فرع 8: عطبرة (2 عميل)
+-- Branch 8: Atbara (2 customers)
 (8,'الزين محمد النور',           '11800001','0988000001','male',  '2024-01-10 09:00:00'),
 (8,'سناء أحمد خالد',            '11800002','0988000002','female','2024-11-25 10:00:00');
 
 -- ============================================================
--- حسابات: متوسط 1.4 حساب لكل عميل
--- الأرصدة بالجنيه السوداني (دولار 5500 جنيه)
--- متوسط رصيد حساب توفير: 150,000-800,000 جنيه (~27-145 دولار)
--- حسابات الاستثمار والتجاري أعلى بكثير
+-- Accounts: 83 accounts for the 80 customers
+-- Balances are in Sudanese pounds (5,500 pounds per US dollar)
+-- Typical savings balance: 150,000-800,000 pounds (about 27-145 US dollars)
+-- Investment and current accounts are much higher
 -- ============================================================
 INSERT INTO accounts (customer_id,branch_id,account_type,balance,status,opened_at) VALUES
--- فرع 1
+-- Branch 1
 (1,1,'current',    1850000.00,'active','2023-01-15 09:00:00'),
 (1,1,'savings',     420000.00,'active','2023-06-01 09:00:00'),
 (2,1,'savings',     280000.00,'active','2023-02-10 09:00:00'),
@@ -350,7 +350,7 @@ INSERT INTO accounts (customer_id,branch_id,account_type,balance,status,opened_a
 (18,1,'savings',    195000.00,'active','2024-06-15 09:00:00'),
 (19,1,'investment',2800000.00,'active','2024-09-10 09:00:00'),
 (20,1,'savings',    130000.00,'active','2025-01-20 09:00:00'),
--- فرع 2
+-- Branch 2
 (21,2,'savings',    350000.00,'active','2023-02-01 09:00:00'),
 (22,2,'current',   1150000.00,'active','2023-03-15 09:00:00'),
 (23,2,'savings',    290000.00,'active','2023-04-10 09:00:00'),
@@ -369,7 +369,7 @@ INSERT INTO accounts (customer_id,branch_id,account_type,balance,status,opened_a
 (36,2,'savings',    120000.00,'active','2025-01-08 09:00:00'),
 (37,2,'savings',    380000.00,'active','2025-03-15 09:00:00'),
 (38,2,'savings',     95000.00,'active','2025-05-20 09:00:00'),
--- فرع 3
+-- Branch 3
 (39,3,'savings',    310000.00,'active','2023-03-10 09:00:00'),
 (40,3,'current',    870000.00,'active','2023-05-22 09:00:00'),
 (41,3,'savings',    205000.00,'active','2023-08-14 09:00:00'),
@@ -382,7 +382,7 @@ INSERT INTO accounts (customer_id,branch_id,account_type,balance,status,opened_a
 (48,3,'savings',    140000.00,'active','2025-01-15 09:00:00'),
 (49,3,'savings',    320000.00,'active','2025-03-20 09:00:00'),
 (50,3,'savings',    180000.00,'active','2025-05-05 09:00:00'),
--- فرع 4
+-- Branch 4
 (51,4,'savings',    280000.00,'active','2023-04-05 09:00:00'),
 (52,4,'current',    750000.00,'active','2023-07-18 09:00:00'),
 (53,4,'savings',    195000.00,'active','2023-10-22 09:00:00'),
@@ -394,7 +394,7 @@ INSERT INTO accounts (customer_id,branch_id,account_type,balance,status,opened_a
 (58,4,'savings',    130000.00,'active','2025-02-18 09:00:00'),
 (59,4,'savings',    175000.00,'active','2025-04-10 09:00:00'),
 (60,4,'savings',     85000.00,'active','2025-06-01 09:00:00'),
--- فرع 5
+-- Branch 5
 (61,5,'savings',    245000.00,'active','2023-05-12 09:00:00'),
 (62,5,'current',    680000.00,'active','2023-09-05 09:00:00'),
 (63,5,'savings',    190000.00,'active','2024-01-18 09:00:00'),
@@ -403,28 +403,28 @@ INSERT INTO accounts (customer_id,branch_id,account_type,balance,status,opened_a
 (66,5,'current',    520000.00,'active','2024-10-15 09:00:00'),
 (67,5,'savings',    140000.00,'active','2025-02-05 09:00:00'),
 (68,5,'savings',    110000.00,'active','2025-05-18 09:00:00'),
--- فرع 6
+-- Branch 6
 (69,6,'savings',    220000.00,'active','2023-06-08 09:00:00'),
 (70,6,'current',    580000.00,'active','2023-10-20 09:00:00'),
 (71,6,'savings',    175000.00,'active','2024-03-15 09:00:00'),
 (72,6,'savings',    145000.00,'active','2024-08-10 09:00:00'),
 (73,6,'savings',    195000.00,'active','2025-01-22 09:00:00'),
 (74,6,'savings',    120000.00,'active','2025-05-08 09:00:00'),
--- فرع 7
+-- Branch 7
 (75,7,'savings',    185000.00,'active','2023-08-15 09:00:00'),
 (76,7,'current',    420000.00,'active','2024-02-22 09:00:00'),
 (77,7,'savings',    160000.00,'active','2024-09-10 09:00:00'),
 (78,7,'savings',     95000.00,'active','2025-03-18 09:00:00'),
--- فرع 8
+-- Branch 8
 (79,8,'savings',    210000.00,'active','2024-01-10 09:00:00'),
 (80,8,'savings',    145000.00,'active','2024-11-25 09:00:00');
 
 -- ============================================================
--- معاملات مالية واقعية (مبالغ بالجنيه السوداني)
--- sub_type يعكس طريقة التنفيذ الفعلية
+-- Realistic financial transactions (amounts in Sudanese pounds)
+-- sub_type reflects the actual execution method
 -- ============================================================
 INSERT INTO transactions (account_id,branch_id,txn_type,sub_type,channel,amount,balance_after,created_at) VALUES
--- فرع 1 - حسابات كبيرة
+-- Branch 1 - large accounts
 (1,1,'deposit','cash','branch',500000.00,2000000.00,'2025-08-10 09:00:00'),
 (1,1,'withdrawal','cheque','branch',200000.00,1800000.00,'2025-09-05 10:00:00'),
 (1,1,'transfer_out','bban','branch',150000.00,1650000.00,'2025-10-12 11:00:00'),
@@ -458,7 +458,7 @@ INSERT INTO transactions (account_id,branch_id,txn_type,sub_type,channel,amount,
 (13,1,'transfer_out','bban','branch',1000000.00,3500000.00,'2025-11-01 10:00:00'),
 (13,1,'deposit','bban','branch',1500000.00,5000000.00,'2026-02-15 09:00:00'),
 (13,1,'withdrawal','cheque','branch',800000.00,4200000.00,'2026-05-08 10:00:00'),
--- فرع 2
+-- Branch 2
 (22,2,'deposit','cash','branch',300000.00,1150000.00,'2025-09-01 09:00:00'),
 (22,2,'transfer_out','bban','branch',200000.00,950000.00,'2025-11-15 10:00:00'),
 (22,2,'deposit','bban','branch',500000.00,1450000.00,'2026-02-01 09:00:00'),
@@ -478,7 +478,7 @@ INSERT INTO transactions (account_id,branch_id,txn_type,sub_type,channel,amount,
 (30,2,'deposit','bban','branch',800000.00,2500000.00,'2025-10-10 09:00:00'),
 (30,2,'transfer_out','bban','branch',500000.00,2000000.00,'2026-01-20 10:00:00'),
 (30,2,'deposit','bban','branch',700000.00,2700000.00,'2026-04-10 09:00:00'),
--- فرع 3
+-- Branch 3
 (39,3,'deposit','cash','branch',100000.00,310000.00,'2025-09-20 09:00:00'),
 (39,3,'withdrawal','cash','branch',50000.00,260000.00,'2025-12-15 10:00:00'),
 (39,3,'deposit','app_transfer','app',80000.00,340000.00,'2026-03-10 08:00:00'),
@@ -495,7 +495,7 @@ INSERT INTO transactions (account_id,branch_id,txn_type,sub_type,channel,amount,
 (46,3,'deposit','cash','branch',250000.00,920000.00,'2025-11-10 09:00:00'),
 (46,3,'withdrawal','cheque','branch',150000.00,770000.00,'2026-02-18 10:00:00'),
 (46,3,'deposit','bban','branch',300000.00,1070000.00,'2026-05-22 09:00:00'),
--- فرع 4
+-- Branch 4
 (51,4,'deposit','cash','branch',80000.00,280000.00,'2025-10-05 09:00:00'),
 (51,4,'withdrawal','cash','branch',40000.00,240000.00,'2025-12-20 10:00:00'),
 (51,4,'deposit','app_transfer','app',60000.00,300000.00,'2026-03-08 08:00:00'),
@@ -506,7 +506,7 @@ INSERT INTO transactions (account_id,branch_id,txn_type,sub_type,channel,amount,
 (54,4,'deposit','bban','branch',400000.00,1600000.00,'2025-11-15 09:00:00'),
 (54,4,'transfer_out','bban','branch',200000.00,1400000.00,'2026-02-22 10:00:00'),
 (54,4,'deposit','bban','branch',300000.00,1700000.00,'2026-05-18 09:00:00'),
--- فرع 5
+-- Branch 5
 (61,5,'deposit','cash','branch',80000.00,245000.00,'2025-11-01 09:00:00'),
 (61,5,'withdrawal','cash','branch',35000.00,210000.00,'2026-01-15 10:00:00'),
 (61,5,'deposit','app_transfer','app',50000.00,260000.00,'2026-04-08 08:00:00'),
@@ -516,7 +516,7 @@ INSERT INTO transactions (account_id,branch_id,txn_type,sub_type,channel,amount,
 (64,5,'deposit','bban','branch',300000.00,1400000.00,'2025-11-20 09:00:00'),
 (64,5,'transfer_out','bban','branch',150000.00,1250000.00,'2026-02-28 10:00:00'),
 (64,5,'deposit','bban','branch',200000.00,1450000.00,'2026-05-25 09:00:00'),
--- فروع 6،7،8
+-- Branches 6, 7, 8
 (69,6,'deposit','cash','branch',60000.00,220000.00,'2025-12-01 09:00:00'),
 (69,6,'withdrawal','cash','branch',25000.00,195000.00,'2026-02-10 10:00:00'),
 (70,6,'deposit','cash','branch',150000.00,580000.00,'2025-11-15 09:00:00'),
@@ -530,7 +530,7 @@ INSERT INTO transactions (account_id,branch_id,txn_type,sub_type,channel,amount,
 (79,8,'withdrawal','cash','branch',25000.00,185000.00,'2026-04-05 10:00:00'),
 (80,8,'deposit','cash','branch',40000.00,145000.00,'2026-02-15 09:00:00');
 
--- قروض
+-- Loans
 INSERT INTO loans (customer_id,branch_id,amount,paid_amount,status,issued_at,due_at) VALUES
 (1,1,2750000.00,1375000.00,'active',   '2025-01-01','2027-01-01'),
 (3,1,550000.00, 550000.00, 'paid',     '2024-06-01','2025-06-01'),
@@ -551,7 +551,7 @@ INSERT INTO loans (customer_id,branch_id,amount,paid_amount,status,issued_at,due
 (69,6,440000.00, 220000.00,'active',   '2025-05-01','2026-11-01'),
 (75,7,330000.00, 82500.00, 'active',   '2025-07-01','2026-07-01');
 
--- شكاوى
+-- Complaints
 INSERT INTO complaints (customer_id,branch_id,subject,status,opened_at,resolved_at) VALUES
 (2,1,'تأخر في معالجة التحويل البنكي','resolved','2026-01-10 09:00:00','2026-01-15 14:00:00'),
 (5,1,'خطأ في الرصيد المعروض في التطبيق','closed','2026-02-05 09:00:00','2026-02-08 14:00:00'),
@@ -569,8 +569,7 @@ INSERT INTO complaints (customer_id,branch_id,subject,status,opened_at,resolved_
 (70,6,'خطأ في بيانات العميل','resolved','2026-03-15 09:00:00','2026-03-20 14:00:00'),
 (75,7,'صعوبة في سداد القرض إلكترونياً','open','2026-05-25 09:00:00',NULL);
 
--- تنبيهات
--- مستخدمو التطبيق (60% من العملاء)
+-- App users (43 of the 80 customers)
 INSERT INTO app_users (customer_id,device_type,registered_at,last_login,is_active) VALUES
 (1,'android','2024-01-15 10:00:00','2026-06-29 08:00:00',1),
 (2,'ios',    '2024-02-10 11:00:00','2026-06-28 14:00:00',1),
@@ -616,8 +615,8 @@ INSERT INTO app_users (customer_id,device_type,registered_at,last_login,is_activ
 (76,'ios',   '2025-02-22 10:00:00','2026-06-15 15:00:00',1),
 (79,'android','2025-01-10 09:00:00','2026-06-22 11:00:00',1);
 
--- جلسات التطبيق — تُدرج بـ subquery لتجنب مشكلة الـ FK
--- app_user_id يُحسب تلقائياً من customer_id
+-- App sessions - inserted through a subquery to avoid foreign-key problems
+-- app_user_id is derived automatically from customer_id
 
 INSERT INTO app_sessions (app_user_id,branch_id,action_type,amount,created_at)
 SELECT au.app_user_id,1,'login',NULL,'2026-01-05 08:00:00' FROM app_users au WHERE au.customer_id=1 UNION ALL
@@ -759,9 +758,9 @@ SELECT au.app_user_id,7,'transfer',40000.00,'2026-06-05 09:10:00' FROM app_users
 SELECT au.app_user_id,8,'login',NULL,'2026-06-10 10:00:00' FROM app_users au WHERE au.customer_id=79 UNION ALL
 SELECT au.app_user_id,8,'view_balance',NULL,'2026-06-10 10:01:00' FROM app_users au WHERE au.customer_id=79;
 
--- تحويلات خارجية مع البنوك السودانية (BBAN)
+-- External transfers with Sudanese banks (BBAN)
 INSERT INTO external_transfers (account_id,branch_id,direction,external_bank,bban,amount,channel,created_at) VALUES
--- بنك الخرطوم
+-- Bank of Khartoum
 (1,1,'inbound', 'بنك الخرطوم',       'SD0001001001234567',550000.00,'bban', '2026-01-15 09:00:00'),
 (1,1,'outbound','بنك الخرطوم',       'SD0001001009876543',275000.00,'bban', '2026-02-10 10:00:00'),
 (9,1,'inbound', 'بنك الخرطوم',       'SD0001001005551234',400000.00,'bban', '2026-03-08 09:00:00'),
@@ -769,7 +768,7 @@ INSERT INTO external_transfers (account_id,branch_id,direction,external_bank,bba
 (28,2,'outbound','بنك الخرطوم',      'SD0001002009876543',165000.00,'bban', '2026-03-15 10:00:00'),
 (40,3,'inbound','بنك الخرطوم',       'SD0001003001234567',250000.00,'bban', '2026-02-18 09:00:00'),
 (52,4,'inbound','بنك الخرطوم',       'SD0001004001234567',200000.00,'bban', '2026-04-10 09:00:00'),
--- البنك الأهلي السوداني
+-- Al Ahli Bank of Sudan
 (4,1,'inbound', 'البنك الأهلي السوداني','SD0002001001234567',880000.00,'bban','2026-01-08 09:00:00'),
 (4,1,'outbound','البنك الأهلي السوداني','SD0002001009876543',440000.00,'bban','2026-03-05 10:00:00'),
 (13,1,'inbound','البنك الأهلي السوداني','SD0002001005551234',1650000.00,'bban','2026-02-01 09:00:00'),
@@ -778,25 +777,25 @@ INSERT INTO external_transfers (account_id,branch_id,direction,external_bank,bba
 (42,3,'inbound','البنك الأهلي السوداني','SD0002003001234567',550000.00,'bban','2026-03-10 09:00:00'),
 (54,4,'inbound','البنك الأهلي السوداني','SD0002004001234567',440000.00,'bban','2026-02-20 09:00:00'),
 (64,5,'outbound','البنك الأهلي السوداني','SD0002005009876543',275000.00,'bban','2026-05-05 10:00:00'),
--- بنك فيصل الإسلامي
+-- Faisal Islamic Bank
 (1,1,'outbound','بنك فيصل الإسلامي السوداني','SD0003001009876543',330000.00,'bban','2026-02-15 10:00:00'),
 (9,1,'inbound', 'بنك فيصل الإسلامي السوداني','SD0003001005551234',440000.00,'bban','2026-04-08 09:00:00'),
 (24,2,'inbound','بنك فيصل الإسلامي السوداني','SD0003002001234567',550000.00,'bban','2026-03-20 09:00:00'),
 (30,2,'outbound','بنك فيصل الإسلامي السوداني','SD0003002009876543',220000.00,'bban','2026-05-10 10:00:00'),
 (40,3,'inbound','بنك فيصل الإسلامي السوداني','SD0003003001234567',385000.00,'bban','2026-02-28 09:00:00'),
 (54,4,'outbound','بنك فيصل الإسلامي السوداني','SD0003004009876543',165000.00,'bban','2026-04-25 10:00:00'),
--- بنك السودان التجاري
+-- Sudan Commercial Bank
 (4,1,'inbound', 'بنك السودان التجاري','SD0004001001234567',330000.00,'bban','2026-02-05 09:00:00'),
 (22,2,'outbound','بنك السودان التجاري','SD0004002009876543',165000.00,'bban','2026-03-25 10:00:00'),
 (42,3,'outbound','بنك السودان التجاري','SD0004003009876543',220000.00,'bban','2026-04-18 10:00:00'),
 (52,4,'inbound','بنك السودان التجاري','SD0004004001234567',275000.00,'bban','2026-05-12 09:00:00'),
 (62,5,'outbound','بنك السودان التجاري','SD0004005009876543',110000.00,'bban','2026-06-02 10:00:00'),
--- بنك أمدرمان الوطني
+-- Omdurman National Bank
 (6,1,'outbound','بنك أمدرمان الوطني','SD0005001009876543',220000.00,'bban','2026-03-01 10:00:00'),
 (26,2,'inbound','بنك أمدرمان الوطني','SD0005002001234567',275000.00,'bban','2026-02-22 09:00:00'),
 (46,3,'inbound','بنك أمدرمان الوطني','SD0005003001234567',330000.00,'bban','2026-04-05 09:00:00'),
 (62,5,'outbound','بنك أمدرمان الوطني','SD0005005009876543',155000.00,'bban','2026-05-28 10:00:00'),
--- تحويلات خارجية عبر تطبيق الجوال (وارد وصادر)
+-- External transfers through the mobile app (inbound and outbound)
 (9,1,'inbound', 'بنك الخرطوم',              'SD0001001007778889',95000.00,'app','2026-03-22 09:20:00'),
 (28,2,'outbound','بنك الخرطوم',              'SD0001002007778889',60000.00,'app','2026-04-02 10:20:00'),
 (13,1,'inbound', 'البنك الأهلي السوداني',    'SD0002001007778889',180000.00,'app','2026-02-14 09:30:00'),
@@ -804,7 +803,7 @@ INSERT INTO external_transfers (account_id,branch_id,direction,external_bank,bba
 (40,3,'inbound', 'بنك فيصل الإسلامي السوداني','SD0003003007778889',120000.00,'app','2026-03-30 09:40:00'),
 (52,4,'outbound','بنك السودان التجاري',       'SD0004004007778889',45000.00,'app','2026-05-06 10:40:00');
 
--- تحويلات داخلية بين الحسابات
+-- Internal transfers between accounts
 INSERT INTO internal_transfers (from_account_id,to_account_id,from_branch_id,to_branch_id,amount,transfer_type,channel,created_at) VALUES
 (1,3,1,1,  100000.00,'same_branch','branch','2026-01-18 10:00:00'),
 (2,6,1,1,   50000.00,'same_branch','app',   '2026-02-12 11:00:00'),
@@ -830,7 +829,7 @@ INSERT INTO internal_transfers (from_account_id,to_account_id,from_branch_id,to_
 (24,4,2,1, 280000.00,'inter_branch','branch','2026-05-15 10:00:00');
 
 -- ============================================================
--- 4) استعلام تحقق — يجب أن تظهر الأعداد التالية بعد الاستيراد
+-- 4) Verification query - these row counts should appear after the import
 -- ============================================================
 SELECT 'branches' AS tbl, COUNT(*) AS `rows` FROM branches
 UNION ALL SELECT 'users',              COUNT(*) FROM users

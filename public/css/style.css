@@ -8,9 +8,7 @@
 :root {
   --navy:        #1E1E22;   /* charcoal (logo lettering) */
   --navy-mid:    #2D2D32;
-  --navy-light:  #45454C;
   --gold:        #C5A04A;
-  --gold-light:  #E2C77D;
   --gold-dark:   #8F6F22;
   --gold-pale:   #F8F1DD;
   --silver:      #A9ADB4;
@@ -36,7 +34,6 @@
   --shadow:      0 2px 12px rgba(30,30,34,.08);
   --shadow-lg:   0 8px 32px rgba(30,30,34,.14);
   --metal-gold:  linear-gradient(135deg,#9A7A2A 0%,#DDBF69 38%,#B58E34 62%,#EBD493 100%);
-  --metal-silver:linear-gradient(135deg,#8E939B 0%,#DCDEE2 40%,#A3A7AE 65%,#E8EAED 100%);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -160,7 +157,7 @@ body {
 .main {
   margin-right: var(--sidebar-w);
   flex: 1;
-  min-width: 0;               /* يمنع الجداول العريضة من توسيع الصفحة */
+  min-width: 0;               /* keeps wide tables from stretching the page */
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -262,8 +259,6 @@ body {
   align-items: center;
   gap: 3px;
 }
-.kpi-trend.up   { color: var(--success); }
-.kpi-trend.down { color: var(--danger); }
 
 /* SECTION CARD */
 .card {
@@ -292,7 +287,6 @@ body {
 .card-body { padding: 22px; }
 
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
 
 /* ============================================================
    TABLES
@@ -321,7 +315,7 @@ tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover { background: var(--gray-50); }
 
 /* ============================================================
-   BADGES & ALERTS
+   BADGES
    ============================================================ */
 .badge {
   display: inline-flex;
@@ -335,46 +329,6 @@ tbody tr:hover { background: var(--gray-50); }
 .badge-danger  { background: var(--danger-light);  color: var(--danger); }
 .badge-warn    { background: var(--warn-light);    color: var(--warn); }
 .badge-teal    { background: var(--teal-light);    color: var(--teal); }
-.badge-gray    { background: var(--gray-100);      color: var(--gray-700); }
-
-.alert-box {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: var(--radius);
-  margin-bottom: 10px;
-  border-right: 4px solid;
-}
-.alert-box.danger  { background: var(--danger-light);  border-color: var(--danger);  color: #7A1010; }
-.alert-box.info    { background: var(--teal-light);    border-color: var(--teal);    color: #0A3D4F; }
-
-/* ============================================================
-   PROGRESS BARS
-   ============================================================ */
-.progress-track {
-  height: 7px;
-  background: var(--gray-100);
-  border-radius: 4px;
-  overflow: hidden;
-}
-.progress-fill {
-  height: 100%;
-  border-radius: 4px;
-  transition: width .6s ease;
-}
-.fill-gold    { background: var(--gold); }
-.fill-teal    { background: var(--teal); }
-.fill-danger  { background: var(--danger); }
-.fill-success { background: var(--success); }
-
-/* ============================================================
-   BRANCH COMPARISON BARS
-   ============================================================ */
-
-/* ============================================================
-   RANK TABLE (top accounts)
-   ============================================================ */
 
 /* ============================================================
    LOGIN PAGE
@@ -462,7 +416,6 @@ tbody tr:hover { background: var(--gray-50); }
   color: var(--navy);
 }
 .btn-gold:hover { filter: brightness(1.06); }
-.btn-sm { padding: 6px 14px; font-size: 12px; }
 
 .error-msg {
   background: var(--danger-light);
@@ -481,21 +434,8 @@ tbody tr:hover { background: var(--gray-50); }
 .chart-container canvas { max-width: 100%; }
 
 /* ============================================================
-   USERS MANAGEMENT TABLE (Admin)
+   FORM CONTROLS
    ============================================================ */
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 22px;
-}
-.page-header h2 { font-size: 20px; font-weight: 800; color: var(--navy); }
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
 .form-control {
   width: 100%;
   padding: 10px 13px;
@@ -511,36 +451,10 @@ tbody tr:hover { background: var(--gray-50); }
 
 select.form-control { cursor: pointer; }
 
-.modal-backdrop {
-  display: none;
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,.5);
-  z-index: 200;
-  align-items: center;
-  justify-content: center;
-}
-.modal-backdrop.open { display: flex; }
-.modal {
-  background: var(--white);
-  border-radius: 14px;
-  padding: 28px;
-  width: 100%;
-  max-width: 500px;
-  box-shadow: var(--shadow-lg);
-  max-height: 90vh;
-  overflow-y: auto;
-}
-.modal-title {
-  font-size: 16px;
-  font-weight: 800;
-  color: var(--navy);
-  margin-bottom: 20px;
-}
-
 /* ============================================================
    RESPONSIVE
    ============================================================ */
-/* زر القائمة والطبقة الخلفية (تظهر في الهاتف فقط) */
+/* Menu button and backdrop overlay (shown on phones only) */
 .menu-btn { display: none; background: none; border: 1px solid var(--gray-200, #ddd); border-radius: 10px;
   width: 42px; height: 42px; font-size: 22px; line-height: 1; cursor: pointer; color: var(--navy, #1E1E22); flex-shrink: 0; }
 .sidebar-overlay { display: none; }
@@ -556,7 +470,7 @@ select.form-control { cursor: pointer; }
   .topbar-start { display: flex; align-items: center; min-width: 0; flex: 1; }
   .topbar-title { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .topbar-date { display: none; }
-  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .grid-2 { grid-template-columns: 1fr; }
   .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .kpi-card { padding: 14px 12px; gap: 10px; }
   .kpi-icon { width: 38px; height: 38px; font-size: 18px; }
@@ -580,35 +494,20 @@ select.form-control { cursor: pointer; }
 }
 
 /* ============================================================
-   مكوّنات القالب الموحّد (includes/layout.php)
+   Shared template components (includes/layout.php)
    ============================================================ */
-.muted { color: var(--gray-500); } .small { font-size: 11.5px; } .center { text-align: center; } .mb { margin-bottom: 14px; }
+.muted { color: var(--gray-500); } .small { font-size: 11.5px; } .mb { margin-bottom: 14px; }
 .green { color: var(--success); } .red { color: var(--danger); }
 td.empty { text-align: center; padding: 30px; color: var(--gray-500); }
 .section-title { font-weight: 800; color: var(--navy); margin: 4px 0 10px; }
-.bar { display: flex; align-items: center; gap: 6px; } .bar .progress-track { flex: 1; height: 7px; }
-form.inline { display: inline; }
 
-/* نماذج الفلترة */
+/* Filter forms */
 .filter-form { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 14px; }
 .filter-form .btn { width: auto; }
 .field label { display: block; font-size: 12px; font-weight: 700; color: var(--gray-700); margin-bottom: 4px; }
 .field .form-control { min-width: 150px; }
-.form-row .field, .modal .field { margin-bottom: 12px; }
-.modal-actions { display: flex; gap: 10px; margin-top: 14px; } .modal-actions .btn { flex: 1; }
-.btn-cancel { background: var(--gray-100); color: var(--text); }
-.alert-box.danger, .alert-box.info { margin-bottom: 14px; }
 
-/* صندوق رقم ملوّن */
-.stat-box { text-align: center; padding: 16px; border-radius: var(--radius); background: var(--gold-pale); }
-.stat-box.red { background: var(--danger-light); } .stat-box.green { background: var(--success-light); }
-.stat-label { font-size: 12px; font-weight: 700; color: var(--gray-700); margin-bottom: 6px; }
-.stat-value { font-size: 24px; font-weight: 900; color: var(--gold); }
-.stat-box.red .stat-value { color: var(--danger); } .stat-box.green .stat-value { color: var(--success); }
-.stat-sub { font-size: 11px; color: var(--gray-500); margin-top: 4px; }
-.center .stat-box { display: inline-block; padding: 14px 32px; margin-top: 14px; }
-
-/* شريط القناة الرقمية في لوحة الإدارة العليا */
+/* Digital channel strip on the executive dashboard */
 .strip { background: linear-gradient(135deg, var(--navy), var(--navy-mid)); border-radius: var(--radius); padding: 16px 22px;
          margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 20px; align-items: center; }
 .strip-title { color: var(--gold); font-size: 14px; font-weight: 800; }

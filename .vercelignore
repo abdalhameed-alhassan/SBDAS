@@ -1,4 +1,4 @@
-# ملفات لا يحتاجها وقت التشغيل ولا يجب أن تُخدم علناً
+# Files that are not needed at runtime and must not be served publicly
 database/
 tools/
 docs/

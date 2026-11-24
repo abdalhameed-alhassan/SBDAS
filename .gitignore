@@ -1,4 +1,4 @@
-# أسرار وإعدادات محلية
+# Secrets and local settings
 .env
 .env.*
 !.env.example
@@ -6,7 +6,7 @@
 *.key
 vercel.env
 .vercel/
-# نسخ احتياطية وبيانات
+# Backups and data dumps
 *.bak
 *.dump
 *backup*.sql

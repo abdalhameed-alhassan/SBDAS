@@ -1,7 +1,7 @@
 <?php
-// الاتصال بقاعدة البيانات + دوال الاستعلام المشتركة (يُستدعى مرة واحدة من init.php)
-// نسخة النشر: إعدادات الاتصال من متغيرات البيئة عبر db_conn.php (DB_HOST DB_PORT DB_USER DB_PASS DB_NAME DB_SSL ...)
-// وبلا أي متغيرات يعمل على XAMPP بالقيم الافتراضية (localhost / root / sbdas).
+// Database connection and the shared query helpers (loaded once, through init.php).
+// Connection settings come from environment variables via db_conn.php (DB_HOST, DB_PORT, DB_USER, DB_PASS, DB_NAME, DB_SSL ...).
+// With no variables set it falls back to the XAMPP defaults (localhost / root / sbdas).
 require_once __DIR__ . '/db_conn.php';
 try {
     $conn = newDbConnection();
@@ -11,7 +11,7 @@ try {
     die('خطأ في الاتصال بقاعدة البيانات');
 }
 
-// استعلام محضَّر بمعاملات آمنة: run('SELECT ... WHERE a=? AND b=?', [$a, $b])
+// Prepared statement with bound parameters: run('SELECT ... WHERE a=? AND b=?', [$a, $b])
 function run($sql, $params = []) {
     global $conn;
     $st = $conn->prepare($sql);
@@ -20,24 +20,25 @@ function run($sql, $params = []) {
     return $st;
 }
 
-// كل الصفوف / الصف الأول / تنظيف نص قبل إدراجه في استعلام
+// All rows / first row of a query. Only for SQL built from trusted values (casts, whitelists, valid_date()).
 function rows($sql) { global $conn; return $conn->query($sql)->fetch_all(MYSQLI_ASSOC); }
 function row($sql)  { return rows($sql)[0] ?? []; }
-function esc($v)    { global $conn; return $conn->real_escape_string($v); }
 
-// تاريخ صحيح بصيغة YYYY-MM-DD فقط، وإلا القيمة الافتراضية (يحمي من حقن SQL في فلاتر التاريخ)
+// Return $v only when it is a real date in YYYY-MM-DD format, otherwise $default
+// (this keeps the date filters safe to embed in SQL).
 function valid_date($v, $default) {
     $d = is_string($v) ? DateTime::createFromFormat('Y-m-d', $v) : false;
     return ($d && $d->format('Y-m-d') === $v) ? $v : $default;
 }
 
-// سلسلة شهرية (آخر $n أشهر) لمخطط: [التسميات، القيم]
+// Monthly series for a chart (last $n months, oldest first): [labels, values]
 function monthly($expr, $table, $where = '1=1', $n = 6) {
     $r = array_reverse(rows("SELECT DATE_FORMAT(created_at,'%Y-%m') m, $expr v FROM $table WHERE $where GROUP BY m ORDER BY m DESC LIMIT $n"));
     return [array_column($r, 'm'), array_map('floatval', array_column($r, 'v'))];
 }
 
-// ملخص الفروع (يحل محل vw_branch_summary): فرع واحد إن مُرّر $bid، وإلا كل الفروع الفعالة مرتبة بالإيداعات
+// Branch summary: one branch when $bid is given, otherwise every active branch ordered by deposits.
+// It replaces the old vw_branch_summary view.
 function branch_summary($bid = null) {
     $t = "(SELECT COALESCE(SUM(amount),0) FROM transactions WHERE branch_id=b.branch_id AND status='completed' AND ";
     return rows("SELECT b.branch_id, b.branch_name, b.city,

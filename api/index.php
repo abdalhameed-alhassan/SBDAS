@@ -1,16 +1,16 @@
 <?php
 /**
- * api/index.php — نقطة الدخول الوحيدة (Front Controller) لنشر Vercel عبر vercel-php،
- * وللتشغيل المحلي عبر:   php -S 127.0.0.1:8080 -t public api/index.php
- * يقبل صفحات المشروع المعروفة فقط (الجذر + login/logout + pages/{executive,branch_manager}/*.php)
- * ويضمّنها كما هي. أي مسار آخر (includes/، database/، tools/…) يُرفض بـ 404 ولا يُنفَّذ.
- * الملفات الساكنة (CSS/صور) تُخدم مباشرة من public/ ولا تمر من هنا.
+ * api/index.php - the single entry point (front controller) for the Vercel deployment through vercel-php,
+ * and for local runs with:   php -S 127.0.0.1:8080 -t public api/index.php
+ * It accepts only the known project pages (root + login/logout + pages/{executive,branch_manager}/*.php)
+ * and includes them as they are. Any other path (includes/, database/, tools/ ...) is rejected with 404
+ * and never executed. Static files (CSS / images) are served straight from public/ and do not pass through here.
  */
 $root = dirname(__DIR__);
 $path = parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
 $path = is_string($path) ? rawurldecode($path) : '/';
 
-// تشغيل محلي: دع خادم PHP المدمج يخدم الملفات الساكنة من public/
+// Local run: let PHP's built-in server serve the static files from public/
 if (PHP_SAPI === 'cli-server' && $path !== '/' && is_file($root . '/public' . $path)) {
     return false;
 }

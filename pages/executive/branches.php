@@ -4,13 +4,13 @@ require_role('executive');
 
 $branches = branch_summary();
 
-// كل حركات الفروع مجمّعة مرة واحدة: [فرع][نوع العملية][طريقة التنفيذ] => [المبلغ، العدد]
+// All branch transactions grouped in one query: [branch][transaction type][execution method] => [amount, count]
 $by = [];
 foreach (rows("SELECT branch_id, txn_type, sub_type, SUM(amount) AS amt, COUNT(*) AS c FROM transactions
                WHERE status='completed' GROUP BY branch_id, txn_type, sub_type") as $r)
     $by[$r['branch_id']][$r['txn_type']][$r['sub_type']] = $r;
 
-// جدول تفصيل: صف لكل فرع، وعمود لكل طريقة تنفيذ بصيغة «المبلغ (العدد)»
+// Breakdown table: one row per branch and one column per execution method, each cell shown as "amount (count)"
 function breakdown_card($title, $icon, $branches, $by, $types, $cols) {
     $out = [];
     foreach ($branches as $b) {

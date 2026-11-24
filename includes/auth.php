@@ -1,6 +1,7 @@
 <?php
-// الجلسة والصلاحيات
-// نسخة النشر: على Vercel (بلا ملفات دائمة) تُحفظ الجلسات في جدول sessions عند SESSION_STORE=db
+// Session setup, role definitions and access control.
+// On Vercel there is no persistent disk, so when SESSION_STORE=db the sessions
+// are kept in the `sessions` table instead of local files.
 if (session_status() === PHP_SESSION_NONE) {
     if (strtolower((string)getenv('SESSION_STORE')) === 'db') {
         require_once __DIR__ . '/session_handler.php';
@@ -15,15 +16,15 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// الأدوار: الاسم العربي + مجلد صفحاتها
+// Roles: role key => Arabic display name. The key is also the name of the role's pages folder.
 const ROLES = [
-    'executive'       => ['الإدارة العليا', 'executive'],
-    'branch_manager'  => ['مدير الفرع',    'branch_manager'],
+    'executive'      => 'الإدارة العليا',
+    'branch_manager' => 'مدير الفرع',
 ];
 
-// مسار المشروع من جذر الخادم (يعمل داخل أي مجلد فرعي مثل /sbdas_lite)
+// Project path relative to the web root (works inside any sub-folder such as /sbdas_lite).
 function base_url() {
-    // نسخة النشر: الجذر العام من APP_BASE_URL (على Vercel القيمة / فتصبح النتيجة نصاً فارغاً)
+    // Deployment: the public root comes from APP_BASE_URL (on Vercel it is "/", which yields an empty string).
     $env = getenv('APP_BASE_URL');
     if ($env !== false && $env !== '') return rtrim($env, '/');
     $doc  = str_replace('\\', '/', $_SERVER['DOCUMENT_ROOT']);
@@ -32,20 +33,30 @@ function base_url() {
 }
 
 function is_logged_in() { return isset($_SESSION['user_id'], $_SESSION['role'], ROLES[$_SESSION['role']]); }
-function role_label($role) { return ROLES[$role][0] ?? $role; }
+function role_label($role) { return ROLES[$role] ?? $role; }
 
 function current_user() {
     return ['id' => $_SESSION['user_id'] ?? null, 'name' => $_SESSION['full_name'] ?? '',
             'role' => $_SESSION['role'] ?? '', 'branch_id' => $_SESSION['branch_id'] ?? null];
 }
 
+// Store the authenticated user in a fresh session, then send them to their dashboard.
+function login_user($u) {
+    session_regenerate_id(true);
+    $_SESSION['user_id']   = $u['user_id'];
+    $_SESSION['full_name'] = $u['full_name'];
+    $_SESSION['role']      = $u['role'];
+    $_SESSION['branch_id'] = $u['branch_id'];
+    redirect_by_role($u['role']);
+}
+
 function redirect_by_role($role) {
-    $folder = ROLES[$role][1] ?? null;
-    header('Location: ' . base_url() . '/' . ($folder ? "pages/$folder/dashboard.php" : 'login.php'));
+    header('Location: ' . base_url() . '/' . (isset(ROLES[$role]) ? "pages/$role/dashboard.php" : 'login.php'));
     exit;
 }
 
-// تسمح الصفحة بالأدوار المذكورة فقط؛ غير المسجّل يذهب للدخول، وغير المصرّح له إلى لوحته
+// A page allows only the listed roles: visitors who are not logged in go to the login page,
+// and users with another role are sent back to their own dashboard.
 function require_role(...$roles) {
     if (!is_logged_in()) { header('Location: ' . base_url() . '/login.php'); exit; }
     if (!in_array($_SESSION['role'], $roles)) redirect_by_role($_SESSION['role']);

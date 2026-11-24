@@ -6,36 +6,24 @@ if (is_logged_in()) redirect_by_role($_SESSION['role']);
 
 $error = '';
 
-// ── الدخول التجريبي لأعضاء الفريق (بدون اسم مستخدم وكلمة مرور) ──
-// يعمل فقط عند ضبط DEMO_LOGIN=1 ولحسابين محددين فقط (الإدارة العليا ومدير الفرع الرئيسي).
+// ── Demo login for team members (no username or password) ──
+// Works only when DEMO_LOGIN=1, and only for two fixed accounts (the executive and the main branch manager).
 $demoEnabled  = getenv('DEMO_LOGIN') === '1';
 $demoAccounts = ['executive' => 'executive', 'branch_manager' => 'manager1'];
-$isDemo = $demoEnabled && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['demo'], $demoAccounts[$_POST['demo']]);
+$isDemo = $demoEnabled && $_SERVER['REQUEST_METHOD'] === 'POST' && is_string($_POST['demo'] ?? null) && isset($demoAccounts[$_POST['demo']]);
 
 if ($isDemo) {
     $u = run("SELECT user_id, full_name, role, branch_id FROM users WHERE username=? AND is_active=1 AND role IN ('executive','branch_manager')", [$demoAccounts[$_POST['demo']]])
          ->get_result()->fetch_assoc();
-    if ($u) {
-        session_regenerate_id(true);
-        $_SESSION['user_id']   = $u['user_id'];
-        $_SESSION['full_name'] = $u['full_name'];
-        $_SESSION['role']      = $u['role'];
-        $_SESSION['branch_id'] = $u['branch_id'];
-        redirect_by_role($u['role']);
-    }
+    if ($u) login_user($u);
     $error = 'الحساب التجريبي غير متاح حالياً.';
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $u = run("SELECT user_id, full_name, role, branch_id, password_hash FROM users WHERE username=? AND is_active=1 AND role IN ('executive','branch_manager')", [$_POST['username']])
+    $username = is_string($_POST['username'] ?? null) ? $_POST['username'] : '';
+    $password = is_string($_POST['password'] ?? null) ? $_POST['password'] : '';
+    $u = run("SELECT user_id, full_name, role, branch_id, password_hash FROM users WHERE username=? AND is_active=1 AND role IN ('executive','branch_manager')", [$username])
          ->get_result()->fetch_assoc();
 
-    if ($u && password_verify($_POST['password'], $u['password_hash'])) {
-        session_regenerate_id(true);
-        $_SESSION['user_id']   = $u['user_id'];
-        $_SESSION['full_name'] = $u['full_name'];
-        $_SESSION['role']      = $u['role'];
-        $_SESSION['branch_id'] = $u['branch_id'];
-        redirect_by_role($u['role']);
-    }
+    if ($u && password_verify($password, $u['password_hash'])) login_user($u);
     $error = 'اسم المستخدم أو كلمة المرور غير صحيحة.';
 }
 ?>

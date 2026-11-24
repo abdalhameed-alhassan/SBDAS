@@ -2,7 +2,7 @@
 require_once '../../includes/init.php';
 require_role('executive');
 
-// ── أرقام البنك ──
+// ── Bank-wide figures ──
 $k = row("SELECT
     (SELECT COUNT(*) FROM customers WHERE is_active=1) AS customers,
     (SELECT COUNT(*) FROM accounts) AS accounts,
@@ -14,7 +14,7 @@ $k = row("SELECT
     (SELECT AVG(DATEDIFF(resolved_at,opened_at)) FROM complaints WHERE resolved_at IS NOT NULL) AS avg_days,
     (SELECT COALESCE(SUM(amount),0) FROM transactions WHERE txn_type='deposit' AND status='completed') AS deposits");
 
-// ── شريط القناة الرقمية (يُحسب "نشط آخر 30 يوماً" نسبةً لآخر دخول مسجَّل في البيانات) ──
+// ── Digital channel strip ("active in the last 30 days" is measured from the latest login recorded in the data) ──
 $app = row("SELECT
     (SELECT COUNT(*) FROM app_users) AS users,
     (SELECT COUNT(*) FROM app_users WHERE last_login >= DATE_SUB((SELECT MAX(last_login) FROM app_users), INTERVAL 30 DAY)) AS active30,
@@ -24,14 +24,14 @@ $app = row("SELECT
     (SELECT COALESCE(SUM(amount),0) FROM external_transfers WHERE status='completed' AND channel='app' AND direction='inbound') AS inbound,
     (SELECT COALESCE(SUM(amount),0) FROM external_transfers WHERE status='completed' AND channel='app' AND direction='outbound') AS outbound");
 
-// ── مؤشرات الأداء ──
+// ── Performance indicators ──
 [$growthLabels, $growth] = monthly('COUNT(*)', 'customers', 'is_active=1');
 [$depLabels, $dep]       = monthly('SUM(amount)', 'transactions', "txn_type='deposit' AND status='completed'");
-// نسبة التعثر = القروض المتعثرة ÷ (النشطة + المتعثرة) — المسدَّدة لا تدخل في المقام
+// Default rate = defaulted loans / (active + defaulted loans); paid-off loans are not part of the denominator
 $live = (int)$k['active_loans'] + (int)$k['defaulted'];
 $defaultRate   = $live ? round($k['defaulted'] / $live * 100, 1) : 0;
 $complaintRate = $k['complaints'] ? round($k['open_complaints'] / $k['complaints'] * 100, 1) : 0;
-// نمو العملاء = تسجيلات الشهر الأخير مقابل ما قبله؛ غير محدد إن لم يوجد شهر سابق أو كان صفراً
+// Customer growth = registrations in the latest month versus the month before; undefined (null) when there is no earlier month or it is zero
 $last = end($growth); $prev = prev($growth);
 $growthRate = ($prev) ? round(($last - $prev) / $prev * 100, 1) : null;
 

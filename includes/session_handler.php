@@ -2,16 +2,16 @@
 /**
  * includes/session_handler.php
  * -----------------------------------------------------------
- * معالج جلسات PHP يخزّن الجلسات في جدول MySQL باسم `sessions` بدل ملفات الخادم المحلية
- * (ضروري على Vercel / Serverless لأن ملفات الجلسات لا تدوم ولا تُشارك بين النسخ).
+ * PHP session handler that stores sessions in the MySQL table `sessions` instead of local files
+ * (required on Vercel / serverless, where session files neither persist nor are shared between instances).
  *
- * لا يغيّر منطق المصادقة: ما زال التطبيق يستعمل $_SESSION و session_start() و
- * session_regenerate_id() كما هو؛ التغيير فقط في مكان تخزين بيانات الجلسة.
+ * Authentication logic is unchanged: the application still uses $_SESSION, session_start() and
+ * session_regenerate_id(); only the place where session data is stored differs.
  *
- * منع تعارض الطلبات المتزامنة: يعمل المعالج باتصال MySQL مستقل عن اتصال التطبيق،
- * ويفتح معاملة في read() ويقفل صف الجلسة بـ SELECT ... FOR UPDATE حتى write()/close()
- * (نفس سلوك قفل ملف الجلسة الافتراضي): طلبان لنفس الجلسة يُنفَّذان بالتتابع فلا يضيع تحديث.
- * يعمل القفل على MySQL وMariaDB وTiDB (لا يعتمد على GET_LOCK).
+ * Concurrent requests: the handler uses its own MySQL connection, separate from the application's.
+ * read() opens a transaction and locks the session row with SELECT ... FOR UPDATE until write()/close(),
+ * which mirrors the default file-locking behaviour: two requests for the same session run one after the
+ * other, so no update is lost. The locking works on MySQL, MariaDB and TiDB (it does not use GET_LOCK).
  * -----------------------------------------------------------
  */
 require_once __DIR__ . '/db_conn.php';
@@ -21,8 +21,6 @@ class SbdasDbSessionHandler implements SessionHandlerInterface, SessionUpdateTim
     /** @var mysqli|null */
     private $db = null;
     private $inTx = false;
-    private $lockedId = null;
-    private $loadedData = null;   // ما قُرئ فعلاً، لتجنّب كتابة لا حاجة لها
     private $lockWait;
 
     public function __construct($lockWaitSeconds = 10) { $this->lockWait = (int)$lockWaitSeconds; }
@@ -31,8 +29,9 @@ class SbdasDbSessionHandler implements SessionHandlerInterface, SessionUpdateTim
         if ($this->db === null) {
             $this->db = newDbConnection();
             $this->db->query("SET SESSION innodb_lock_wait_timeout = " . max(1, $this->lockWait));
-            // READ COMMITTED: لا أقفال فجوات (gap locks) عند SELECT … FOR UPDATE على صف غير موجود؛ بدونه يتعثر زوار جدد
-            // يصلون في اللحظة نفسها بـ Deadlock (اكتُشف في الاختبار). لا يؤثر على اتصال التطبيق (اتصال مستقل).
+            // READ COMMITTED avoids gap locks when SELECT ... FOR UPDATE targets a row that does not exist yet.
+            // Without it, new visitors arriving at the same moment hit a deadlock (found during testing).
+            // It does not affect the application's own connection, which is separate.
             $this->db->query("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
         }
         return $this->db;
@@ -43,7 +42,6 @@ class SbdasDbSessionHandler implements SessionHandlerInterface, SessionUpdateTim
             try { $commit ? $this->db->commit() : $this->db->rollback(); } catch (Throwable $e) { error_log('session tx end: ' . $e->getMessage()); }
         }
         $this->inTx = false;
-        $this->lockedId = null;
     }
 
     public function open(string $path, string $name): bool { return true; }
@@ -53,7 +51,7 @@ class SbdasDbSessionHandler implements SessionHandlerInterface, SessionUpdateTim
         return true;
     }
 
-    // التحقق من وجود المعرّف (use_strict_mode): يمنع قبول معرّف جلسة غير صادر من الخادم
+    // Check that the id exists (use_strict_mode): prevents accepting a session id the server never issued.
     public function validateId(string $id): bool {
         try {
             $st = $this->conn()->prepare("SELECT 1 FROM sessions WHERE id = ?");
@@ -67,21 +65,21 @@ class SbdasDbSessionHandler implements SessionHandlerInterface, SessionUpdateTim
     }
 
     public function read(string $id): string|false {
-        // إعادة محاولة قصيرة عند Deadlock (1213) أو مهلة القفل (1205) — نادرة، لكنها قد تحدث تحت ضغط متزامن
+        // Short retry on deadlock (1213) or lock wait timeout (1205): rare, but possible under concurrent load.
         for ($attempt = 1; $attempt <= 3; $attempt++) {
             try {
                 $db = $this->conn();
                 $this->finishTx(true);
                 $db->begin_transaction();
                 $this->inTx = true;
-                $this->lockedId = $id;
 
                 $st = $db->prepare("SELECT data FROM sessions WHERE id = ? FOR UPDATE");
                 $st->bind_param('s', $id);
                 $st->execute();
                 $row = $st->get_result()->fetch_assoc();
                 if ($row === null) {
-                    // جلسة جديدة: ننشئ الصف فوراً ليُقفل (INSERT IGNORE يحمي من سباق إنشاء نفس المعرّف)
+                    // New session: create the row immediately so that it is locked
+                    // (INSERT IGNORE protects against a race creating the same id twice).
                     $now = time();
                     $ins = $db->prepare("INSERT IGNORE INTO sessions (id, data, created_at, last_access) VALUES (?, '', ?, ?)");
                     $ins->bind_param('sii', $id, $now, $now);
@@ -89,8 +87,7 @@ class SbdasDbSessionHandler implements SessionHandlerInterface, SessionUpdateTim
                     $st->execute();
                     $row = $st->get_result()->fetch_assoc();
                 }
-                $this->loadedData = (string)($row['data'] ?? '');
-                return $this->loadedData;
+                return (string)($row['data'] ?? '');
             } catch (Throwable $e) {
                 $errno = ($e instanceof mysqli_sql_exception) ? (int)$e->getCode() : 0;
                 $this->finishTx(false);
@@ -111,7 +108,7 @@ class SbdasDbSessionHandler implements SessionHandlerInterface, SessionUpdateTim
             if (!$this->inTx) { $db->begin_transaction(); $this->inTx = true; }
             $now = time();
             $uid = null;
-            // user_id لأغراض الإدارة فقط (يُستخرج من بيانات الجلسة ولا يُستعمل في المصادقة)
+            // user_id is stored for administration only (taken from the session data, never used for authentication).
             if (preg_match('/(?:^|;)user_id\|(?:i:(\d+)|s:\d+:"(\d+)");/', $data, $m)) { $uid = (int)($m[1] !== '' ? $m[1] : ($m[2] ?? 0)); }
             $st = $db->prepare(
                 "INSERT INTO sessions (id, data, user_id, created_at, last_access) VALUES (?, ?, ?, ?, ?)
@@ -119,7 +116,6 @@ class SbdasDbSessionHandler implements SessionHandlerInterface, SessionUpdateTim
             );
             $st->bind_param('ssiii', $id, $data, $uid, $now, $now);
             $st->execute();
-            $this->loadedData = $data;
             $this->finishTx(true);
             return true;
         } catch (Throwable $e) {
@@ -129,7 +125,7 @@ class SbdasDbSessionHandler implements SessionHandlerInterface, SessionUpdateTim
         }
     }
 
-    // تحديث وقت آخر نشاط فقط عندما لا تتغير البيانات
+    // Refresh only the last-activity time when the session data did not change.
     public function updateTimestamp(string $id, string $data): bool {
         try {
             $db = $this->conn();

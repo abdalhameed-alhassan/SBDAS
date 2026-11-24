@@ -37,5 +37,5 @@ includes/              ← db_conn، db، auth، session_handler، layout، repo
 pages/{executive,branch_manager}/
 public/{css,img}/      ← الملفات الساكنة
 database/database.sql  ← القاعدة (11 جدولاً + sessions)
-tools/                 ← استيراد / كلمة مرور / ترحيل (sbdas_tools.ps1)
+tools/                 ← استيراد / كلمة مرور / ترحيل (sbdas_tools.ps1) + cli_db.php (اتصال مشترك للأدوات)
 ```
